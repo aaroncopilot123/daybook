@@ -1,0 +1,147 @@
+"use client";
+
+import {
+  CalendarDays,
+  Check,
+  Flag,
+  Hash,
+  MoreHorizontal,
+  Pencil,
+  RotateCcw,
+  Trash2,
+} from "lucide-react";
+import { dateLabel, localDate, type Project, type Task } from "../lib/tasks";
+
+export function TaskRow({
+  task,
+  project,
+  onToggle,
+  onEdit,
+  onDelete,
+}: {
+  task: Task;
+  project?: Project;
+  onToggle: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <li className={`task-row ${task.completedAt ? "is-completed" : ""}`}>
+      <button
+        className={`completion-target priority-${task.priority ?? 0}`}
+        aria-label={`${task.completedAt ? "Restore" : "Complete"} ${task.title}`}
+        aria-pressed={!!task.completedAt}
+        onClick={onToggle}
+      >
+        <span className="completion-circle">
+          <Check size={12} strokeWidth={2.5} />
+        </span>
+      </button>
+      <button
+        className="task-content"
+        onClick={onEdit}
+        aria-label={`Edit ${task.title}`}
+      >
+        <span className="task-title">{task.title}</span>
+        {task.description && (
+          <span className="task-description">{task.description}</span>
+        )}
+        {(task.dueDate || project || task.priority || task.completedAt) && (
+          <span className="task-metadata">
+            {task.completedAt && (
+              <span className="completion-date">
+                Completed{" "}
+                {new Date(task.completedAt).toLocaleString("en", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </span>
+            )}
+            {task.dueDate && (
+              <span
+                className={
+                  !task.completedAt && task.dueDate < localDate()
+                    ? "overdue-date"
+                    : task.dueDate === localDate()
+                      ? "today-date"
+                      : ""
+                }
+              >
+                <CalendarDays size={12} />
+                {dateLabel(task.dueDate)}
+                {!task.completedAt && task.dueDate < localDate()
+                  ? " · Overdue"
+                  : ""}
+              </span>
+            )}
+            {project && (
+              <span>
+                <Hash size={12} />
+                {project.name}
+              </span>
+            )}
+            {task.priority && (
+              <span className={`priority-${task.priority}`}>
+                <Flag size={11} />P{task.priority}
+              </span>
+            )}
+          </span>
+        )}
+      </button>
+      {task.completedAt && (
+        <button
+          className="restore-button"
+          aria-label={`Restore ${task.title} to incomplete`}
+          onClick={onToggle}
+        >
+          <RotateCcw size={14} />
+          <span>Restore</span>
+        </button>
+      )}
+      <details
+        className="row-menu"
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget))
+            event.currentTarget.open = false;
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.currentTarget.open = false;
+            event.currentTarget.querySelector("summary")?.focus();
+          }
+        }}
+      >
+        <summary
+          className="icon-button"
+          aria-label={`Actions for ${task.title}`}
+        >
+          <MoreHorizontal size={18} />
+        </summary>
+        <div className="menu-popover">
+          <button
+            onClick={(event) => {
+              event.currentTarget.closest("details")?.removeAttribute("open");
+              onEdit();
+            }}
+          >
+            <Pencil size={14} />
+            Edit task
+          </button>
+          <button
+            className="danger-text"
+            onClick={(event) => {
+              event.currentTarget.closest("details")?.removeAttribute("open");
+              onDelete();
+            }}
+          >
+            <Trash2 size={14} />
+            Delete task
+          </button>
+        </div>
+      </details>
+    </li>
+  );
+}
