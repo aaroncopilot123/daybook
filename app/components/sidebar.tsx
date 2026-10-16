@@ -6,7 +6,6 @@ import {
   CheckCheck,
   ChevronDown,
   ChevronsLeft,
-  CircleHelp,
   Hash,
   ListTodo,
   History,
@@ -187,16 +186,6 @@ export function Sidebar({
           <span>Browse projects</span>
         </button>
       </nav>
-      <div className="sidebar-bottom">
-        <div className="workspace-note">
-          <span className="status-dot" />
-          Your space. Your pace.
-        </div>
-        <div className="sidebar-footnote">
-          <CircleHelp size={14} />
-          One thing at a time.
-        </div>
-      </div>
     </div>
   );
 }

@@ -31,7 +31,6 @@
   --project-tone-0: #a4a8c6;
   --project-tone-1: #9a9fae;
   --project-tone-2: #a9a2d1;
-  --note-text: #a1a4ad;
   --status-dot: #a2a8c6;
   --workspace-dot: #86aa9a;
   --sun-text: #aaa38c;
@@ -112,7 +111,6 @@
   --project-tone-0: #5c6084;
   --project-tone-1: #5a5f6b;
   --project-tone-2: #71628f;
-  --note-text: #5a5f6b;
   --status-dot: #636c91;
   --workspace-dot: #28734d;
   --sun-text: #826c39;
@@ -443,17 +441,6 @@ kbd {
   font-size: 12px;
   color: var(--muted);
 }
-.sidebar-bottom {
-  margin-top: auto;
-  padding: 30px 12px 0;
-}
-.workspace-note {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  color: var(--note-text);
-}
 .status-dot {
   width: 5px;
   height: 5px;
@@ -461,14 +448,6 @@ kbd {
   background: var(--status-dot);
   display: inline-block;
   flex-shrink: 0;
-}
-.sidebar-footnote {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 15px;
-  color: var(--muted);
-  font-size: 10px;
 }
 .main-shell {
   margin-left: var(--sidebar-width);
@@ -1356,21 +1335,6 @@ h1 {
 .project-card-actions {
   display: flex;
 }
-.project-create {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border: 1px dashed var(--dashed-border);
-  border-radius: 8px;
-  padding: 18px;
-  color: var(--muted);
-  font-size: 12px;
-}
-.project-create:hover {
-  background: var(--panel);
-  color: var(--foreground);
-}
 .empty-state {
   padding: 38px 20px 24px;
   text-align: center;
@@ -1721,9 +1685,6 @@ h1 {
   }
   .projects-heading > button:first-child {
     min-height: 44px;
-  }
-  .sidebar-bottom {
-    padding-bottom: env(safe-area-inset-bottom);
   }
   .project-card {
     padding-right: 4px;

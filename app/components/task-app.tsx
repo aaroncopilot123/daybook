@@ -16,7 +16,6 @@ import {
   Plus,
   Sun,
   Trash2,
-  X,
 } from "lucide-react";
 import {
   dateLabel,
@@ -153,9 +152,6 @@ export default function TaskApp() {
             a.createdAt.localeCompare(b.createdAt)
           : a.createdAt.localeCompare(b.createdAt),
     );
-  const selectedProject = store.projects.find(
-    (project) => project.id === selectedProjectId,
-  );
   const overdueTasks = visibleTasks.filter(
     (task) => task.dueDate && task.dueDate < today,
   );
@@ -474,13 +470,6 @@ export default function TaskApp() {
                       </div>
                     </div>
                   ))}
-                  <button
-                    className="project-create"
-                    onClick={() => setProjectEditor({ name: "" })}
-                  >
-                    <Plus size={17} />
-                    Create a project
-                  </button>
                 </div>
               ) : (
                 <>
@@ -489,17 +478,6 @@ export default function TaskApp() {
                     selectedProjectId={selectedProjectId}
                     onSelect={selectProject}
                   />
-                  {selectedProject && (
-                    <div className="filter-context">
-                      <span>
-                        Showing {title.toLowerCase()} in{" "}
-                        <strong>{selectedProject.name}</strong>
-                      </span>
-                      <button onClick={() => selectProject(null)}>
-                        <X size={13} /> Clear filter
-                      </button>
-                    </div>
-                  )}
                   <div className="list-toolbar">
                     <span>
                       {visibleTasks.length}{" "}
@@ -607,7 +585,6 @@ export default function TaskApp() {
               )}
               <footer className="content-footer">
                 <span className="footer-line" />
-                <span>Less noise. More focus.</span>
                 <span className="footer-line" />
               </footer>
             </>
