@@ -753,6 +753,91 @@ h1 {
 .overdue-heading {
   color: var(--overdue);
 }
+.collapsible-section .section-heading {
+  padding-bottom: 6px;
+}
+.section-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 32px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  border-radius: 5px;
+}
+.section-toggle:hover {
+  color: var(--accent-text);
+}
+.section-toggle > svg {
+  transition: transform 150ms ease;
+}
+.section-toggle[aria-expanded="false"] > svg {
+  transform: rotate(-90deg);
+}
+.section-count {
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.section-content {
+  margin-top: 12px;
+}
+.section-empty {
+  color: var(--muted);
+  padding: 18px 14px;
+  margin: 0;
+  font-size: 12px;
+}
+.section-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--task-background);
+  text-align: left;
+  color: var(--muted);
+}
+.section-summary:hover {
+  background: var(--hover);
+  border-color: var(--accent-text);
+}
+.summary-copy {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 9px;
+  min-width: 0;
+}
+.summary-copy > strong {
+  font-size: 12px;
+  color: var(--secondary);
+  font-weight: 550;
+}
+.overdue-section .section-summary {
+  border-left: 3px solid var(--overdue);
+}
+.overdue-section .summary-copy > strong {
+  color: var(--overdue);
+}
+.summary-previews {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 5px;
+  font-size: 12px;
+}
+.summary-previews > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.summary-more {
+  font-size: 11px;
+  color: var(--accent-text);
+}
 .task-list {
   display: flex;
   flex-direction: column;
@@ -1603,8 +1688,11 @@ h1 {
     font-size: 14px;
     min-height: 44px;
   }
-  .select-wrap select {
-    font-size: 14px;
+  .composer-selects .app-select {
+    flex: 1;
+    max-width: calc(50% - 8px);
+  }
+  .section-toggle {
     min-height: 44px;
   }
   .composer-buttons {

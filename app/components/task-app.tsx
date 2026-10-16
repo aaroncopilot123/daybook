@@ -5,7 +5,6 @@ import {
   ArrowDown,
   ArrowUpRight,
   CalendarDays,
-  Check,
   ChevronRight,
   CircleCheck,
   Hash,
@@ -35,6 +34,7 @@ import { ProjectFilters } from "./project-filters";
 import { TaskRow } from "./task-row";
 import { TaskComposer } from "./task-composer";
 import { Dialog } from "./dialog";
+import { TaskSection } from "./task-section";
 
 type Composer = { initial: TaskDraft; id?: string };
 type Confirmation = { title: string; message: string; action: () => void };
@@ -79,6 +79,8 @@ export default function TaskApp() {
     setUndoCompletion(null);
   }
   const [prioritySort, setPrioritySort] = useState(false);
+  const [todayExpanded, setTodayExpanded] = useState(true);
+  const [overdueExpanded, setOverdueExpanded] = useState(true);
   const addTask = useCallback((global = false) => {
     const initial = blankDraft(view);
     if (!global) initial.projectId = selectedProjectId;
@@ -154,9 +156,11 @@ export default function TaskApp() {
   const selectedProject = store.projects.find(
     (project) => project.id === selectedProjectId,
   );
-  const overdueCount = visibleTasks.filter(
+  const overdueTasks = visibleTasks.filter(
     (task) => task.dueDate && task.dueDate < today,
-  ).length;
+  );
+  const overdueCount = overdueTasks.length;
+  const dueTodayTasks = visibleTasks.filter((task) => task.dueDate === today);
   const todayTasks = store.tasks.filter(
     (task) =>
       task.dueDate === today &&
@@ -520,50 +524,28 @@ export default function TaskApp() {
                   </div>
                   {view === "today" ? (
                     <>
-                      {visibleTasks.some((task) => task.dueDate! < today) && (
-                        <section className="task-section">
-                          <h2 className="section-heading overdue-heading">
-                            Overdue
-                            <span>
-                              {
-                                visibleTasks.filter(
-                                  (task) => task.dueDate! < today,
-                                ).length
-                              }
-                            </span>
-                          </h2>
-                          {renderTasks(
-                            visibleTasks.filter(
-                              (task) => task.dueDate! < today,
-                            ),
-                          )}
-                        </section>
+                      <TaskSection
+                        title="Today"
+                        tasks={dueTodayTasks}
+                        expanded={todayExpanded}
+                        onToggle={() => setTodayExpanded((value) => !value)}
+                        date={new Date(`${today}T12:00:00`).toLocaleDateString("en", {
+                          month: "short", day: "numeric",
+                        })}
+                      >
+                        {renderTasks(dueTodayTasks)}
+                      </TaskSection>
+                      {overdueCount > 0 && (
+                        <TaskSection
+                          title="Overdue"
+                          tasks={overdueTasks}
+                          expanded={overdueExpanded}
+                          onToggle={() => setOverdueExpanded((value) => !value)}
+                          overdue
+                        >
+                          {renderTasks(overdueTasks)}
+                        </TaskSection>
                       )}
-                      <section className="task-section">
-                        <h2 className="section-heading">
-                          Today
-                          <span>
-                            {
-                              visibleTasks.filter(
-                                (task) => task.dueDate === today,
-                              ).length
-                            }
-                          </span>
-                          <span className="section-date">
-                            {today
-                              ? new Date(
-                                  `${today}T12:00:00`,
-                                ).toLocaleDateString("en", {
-                                  month: "short",
-                                  day: "numeric",
-                                })
-                              : ""}
-                          </span>
-                        </h2>
-                        {renderTasks(
-                          visibleTasks.filter((task) => task.dueDate === today),
-                        )}
-                      </section>
                     </>
                   ) : view === "upcoming" ? (
                     [...new Set(visibleTasks.map((task) => task.dueDate!))]
@@ -596,34 +578,28 @@ export default function TaskApp() {
                   ) : (
                     renderTasks(visibleTasks)
                   )}
-                  {visibleTasks.length === 0 && (
+                  {visibleTasks.length === 0 && view !== "today" && (
                     <div className="empty-state">
                       <span>
                         {view === "history" ? (
                           <History size={27} />
                         ) : view === "all" ? (
                           <ListTodo size={27} />
-                        ) : view === "upcoming" ? (
-                          <CalendarDays size={27} />
                         ) : (
-                          <Check size={27} />
+                          <CalendarDays size={27} />
                         )}
                       </span>
                       <h2>
                         {view === "history"
                           ? "Your progress starts here"
-                          : view === "today"
-                            ? "A little room to breathe"
-                            : "A fresh page"}
+                          : "A fresh page"}
                       </h2>
                       <p>
                         {view === "history"
                           ? "Completed tasks will appear here. Restore one whenever you need to revisit it."
                           : selectedProjectId
                             ? "No tasks match this view for this project. Choose All projects to see more."
-                            : view === "today"
-                              ? "You’re all caught up. Enjoy the moment, or add something new."
-                              : "Add a task and take the first small step."}
+                            : "Add a task and take the first small step."}
                       </p>
                     </div>
                   )}
