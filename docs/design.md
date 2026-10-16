@@ -26,6 +26,8 @@ Elevation in the dark-first system is achieved through a philosophy Linear calls
 
 ### Dark Theme (Primary)
 
+**Task workspace application surfaces:** Use soft charcoal `#191a1b` for the application canvas, including the content header, and retain `#0f1011` for the sidebar. Floating dialogs and menus use `#1f2023` to preserve luminance stacking. The near-black `#08090a` below remains the marketing canvas reference.
+
 | Token | Name | Hex / RGBA | Role | CSS Variable |
 |-------|------|-----------|------|-------------|
 | `bg-marketing` | Marketing Black | `#08090a` | Marketing page canvas, deepest void | `--color-bg-marketing` |

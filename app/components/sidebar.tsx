@@ -120,6 +120,21 @@ export function Sidebar({
         </button>
       </div>
       <nav aria-label="Projects">
+        <button
+          className={`nav-item ${selectedProjectId === null ? "active" : ""}`}
+          onClick={() => onSelectProject(null)}
+          aria-pressed={selectedProjectId === null}
+        >
+          <Layers2 size={17} />
+          <span>All</span>
+          <span className="nav-count">
+            {
+              tasks.filter((task) =>
+                matchesView(task, view === "projects" ? "all" : view, today),
+              ).length
+            }
+          </span>
+        </button>
         {projects.map((project, index) => (
           <button
             key={project.id}
