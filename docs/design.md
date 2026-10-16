@@ -72,6 +72,35 @@ Elevation in the dark-first system is achieved through a philosophy Linear calls
 | `border-standard` | `rgba(0,0,0,0.1)` | `rgba(255,255,255,0.08)` | `--color-border-standard` |
 | `overlay` | `rgba(0,0,0,0.5)` | `rgba(0,0,0,0.5)` | `--color-overlay` |
 
+### Task workspace theme implementation
+
+The workspace defaults to **dark**, independently of the device theme. A 44×44px sun/moon button in the header switches modes on desktop and mobile. It names the next action (“Switch to light mode” / “Switch to dark mode”), retains keyboard focus, and preserves the current view and task state.
+
+The preference is stored separately as `daybook.theme` (`light` or `dark`) and applied on `<html data-theme>` before first paint. Missing, invalid, or inaccessible storage defaults to dark. If saving fails, switching still works for the current session. Native inputs follow the active CSS `color-scheme`.
+
+These application-specific light values supersede the reference light surface mapping above: white task cards on a cool gray page preserve task separation. Existing typography, 8px task gaps, 10px card corners, and responsive spacing remain unchanged.
+
+| Workspace role | Light color |
+|---|---|
+| Page and header | `#F0F1F2` |
+| Sidebar, task cards, dialogs, menus | `#FFFFFF` |
+| Card hover | `#F7F8FA` |
+| Card border / hover border | `#DADDE3` / `#B8BDC8` |
+| Input and neutral control borders | `#858B98` |
+| Primary / secondary / metadata text | `#08090A` / `#2C2E33` / `#5A5F6B` |
+| Primary action / hover | `#5E6AD2` / `#4B57C8` |
+| Primary action text | `#FFFFFF` |
+| Links, focus, selected text | `#4B57C8` |
+| Selected background / border | `#ECEEFE` / `#A8AFE8` |
+| Overdue, validation, destructive text | `#B42332` |
+| Today and success | `#28734D` |
+| P1 text / fill | `#80500F` / `#FFF3DD` |
+| P2 text / fill | `#725C23` / `#F7F1DF` |
+| P3 text / fill | `#515B6B` / `#EDF0F5` |
+| P4 text / fill | `#5A5F6B` / `#F0F1F2` |
+
+Use semantic CSS variables for surfaces, text, status, interactive states, and floating shadows in both themes. Keep shadows on floating UI only. Verify normal text at 4.5:1 and meaningful controls/focus at 3:1 against their actual surfaces; weight 510 does **not** exempt small text from the 4.5:1 requirement. The reference contrast table below is historical and must not substitute for measuring workspace colors.
+
 ### Contrast Ratios (WCAG AA)
 
 | Pair | Foreground | Background | Ratio | Pass AA | Pass AAA |
@@ -87,7 +116,7 @@ Elevation in the dark-first system is achieved through a philosophy Linear calls
 | Success green on dark | `#27a644` | `#08090a` | 3.4:1 | Passes for UI components (3:1) | No |
 
 > **Important:** `#62666d` (Quaternary) at 3.1:1 is below WCAG AA for text — use only for decorative, disabled, or placeholder text. For any text conveying information use tertiary `#8a8f98` (5.4:1) minimum.
-> **Important:** White-on-indigo button (`#f7f8f8` on `#5e6ad2`) is 3.6:1. Passes for large text (>=18px) or bold text (>=14px bold). For small body-weight button labels, use weight 510 which qualifies as "bold" for contrast purposes at 14px+.
+> **Important:** White-on-indigo button (`#f7f8f8` on `#5e6ad2`) is 3.6:1. Passes for large text (>=18px) or bold text (>=14px bold). Normal-sized button labels require 4.5:1 contrast; weight 510 does not qualify as bold for the large-text exception. Measure the actual button foreground and background before choosing them.
 
 ### Gradients
 

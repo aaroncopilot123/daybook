@@ -16,6 +16,7 @@ import {
   Plus,
   Sun,
   Trash2,
+  X,
 } from "lucide-react";
 import {
   dateLabel,
@@ -28,6 +29,7 @@ import {
 } from "../lib/tasks";
 import { useTasks } from "../lib/use-tasks";
 import { Sidebar } from "./sidebar";
+import { ThemeToggle } from "./theme-toggle";
 import { ProjectFilters } from "./project-filters";
 import { TaskRow } from "./task-row";
 import { TaskComposer } from "./task-composer";
@@ -57,7 +59,16 @@ export default function TaskApp() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     null,
   );
-  const [notice, setNotice] = useState("");
+  const [notice, setNoticeText] = useState("");
+  const [undoCompletion, setUndoCompletion] = useState<{
+    id: string;
+    completedAt: string | null;
+  } | null>(null);
+
+  function setNotice(message: string) {
+    setNoticeText(message);
+    setUndoCompletion(null);
+  }
   const [prioritySort, setPrioritySort] = useState(false);
 
   useEffect(() => {
@@ -72,9 +83,12 @@ export default function TaskApp() {
   }, []);
   useEffect(() => {
     if (!notice) return;
-    const timer = window.setTimeout(() => setNotice(""), 3500);
+    const timer = window.setTimeout(
+      () => setNotice(""),
+      undoCompletion ? 8000 : 3500,
+    );
     return () => window.clearTimeout(timer);
-  }, [notice]);
+  }, [notice, undoCompletion]);
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       if (
@@ -98,7 +112,7 @@ export default function TaskApp() {
   }, [store.ready]);
 
   const title = {
-    all: "All",
+    all: "All tasks",
     today: "Today",
     upcoming: "Upcoming",
     history: "History",
@@ -115,6 +129,12 @@ export default function TaskApp() {
             a.createdAt.localeCompare(b.createdAt)
           : a.createdAt.localeCompare(b.createdAt),
     );
+  const selectedProject = store.projects.find(
+    (project) => project.id === selectedProjectId,
+  );
+  const overdueCount = visibleTasks.filter(
+    (task) => task.dueDate && task.dueDate < today,
+  ).length;
   const todayTasks = store.tasks.filter(
     (task) =>
       task.dueDate === today &&
@@ -215,8 +235,9 @@ export default function TaskApp() {
               setNotice(
                 task.completedAt
                   ? "Task restored to incomplete"
-                  : "A little progress. Task completed.",
+                  : "Task completed. A little progress.",
               );
+              setUndoCompletion({ id: task.id, completedAt: task.completedAt });
             }}
             onEdit={() => editTask(task)}
             onDelete={() => deleteTask(task)}
@@ -262,10 +283,13 @@ export default function TaskApp() {
             <ChevronRight size={13} />
             <span className="breadcrumb-current">{title}</span>
           </div>
-          <span className="topbar-right">
-            <span className="status-dot" />
-            Personal workspace
-          </span>
+          <div className="header-actions">
+            <span className="topbar-right">
+              <span className="status-dot" />
+              Personal workspace
+            </span>
+            <ThemeToggle />
+          </div>
         </header>
         <main id="main-content" className="main-content" tabIndex={-1}>
           {store.storageError && (
@@ -337,15 +361,19 @@ export default function TaskApp() {
                     <CircleCheck size={20} strokeWidth={1.5} />
                   </div>
                   <div className="progress-copy">
-                    <span>Your daily momentum</span>
+                    <span>Due today</span>
                     <span>
-                      {todayCompleted} of {todayTasks.length} tasks completed
+                      {todayTasks.length === 0
+                        ? "No tasks due today"
+                        : `${todayCompleted} of ${todayTasks.length} completed`}
+                      {overdueCount > 0 && ` · ${overdueCount} overdue below`}
                     </span>
                   </div>
                   <div
                     className="progress-track"
                     role="progressbar"
                     aria-label="Today's completion"
+                    aria-valuetext={`${todayCompleted} of ${todayTasks.length} tasks due today completed; overdue tasks excluded`}
                     aria-valuenow={progress}
                     aria-valuemin={0}
                     aria-valuemax={100}
@@ -419,6 +447,17 @@ export default function TaskApp() {
                     selectedProjectId={selectedProjectId}
                     onSelect={selectProject}
                   />
+                  {selectedProject && (
+                    <div className="filter-context">
+                      <span>
+                        Showing {title.toLowerCase()} in{" "}
+                        <strong>{selectedProject.name}</strong>
+                      </span>
+                      <button onClick={() => selectProject(null)}>
+                        <X size={13} /> Clear filter
+                      </button>
+                    </div>
+                  )}
                   <div className="list-toolbar">
                     <span>
                       {visibleTasks.length}{" "}
@@ -698,7 +737,21 @@ export default function TaskApp() {
       {notice && (
         <div className="toast" role="status">
           <CircleCheck size={17} />
-          {notice}
+          <span className="toast-message">{notice}</span>
+          {undoCompletion && (
+            <button
+              className="toast-undo"
+              onClick={() => {
+                store.setTaskCompletion(
+                  undoCompletion.id,
+                  undoCompletion.completedAt,
+                );
+                setNotice("Completion undone");
+              }}
+            >
+              Undo
+            </button>
+          )}
         </div>
       )}
     </div>

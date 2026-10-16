@@ -40,7 +40,7 @@ export function Sidebar({
   onSelectProject: (id: string | null) => void;
 }) {
   const links = [
-    { id: "all" as const, label: "All", Icon: ListTodo },
+    { id: "all" as const, label: "All tasks", Icon: ListTodo },
     { id: "today" as const, label: "Today", Icon: Sun },
     { id: "upcoming" as const, label: "Upcoming", Icon: CalendarDays },
     { id: "history" as const, label: "History", Icon: History },
@@ -126,7 +126,7 @@ export function Sidebar({
           aria-pressed={selectedProjectId === null}
         >
           <Layers2 size={17} />
-          <span>All</span>
+          <span>All projects</span>
           <span className="nav-count">
             {
               tasks.filter((task) =>

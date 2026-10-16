@@ -28,7 +28,7 @@ export function TaskRow({
   return (
     <li className={`task-row ${task.completedAt ? "is-completed" : ""}`}>
       <button
-        className={`completion-target priority-${task.priority ?? 0}`}
+        className="completion-target"
         aria-label={`${task.completedAt ? "Restore" : "Complete"} ${task.title}`}
         aria-pressed={!!task.completedAt}
         onClick={onToggle}
@@ -84,8 +84,16 @@ export function TaskRow({
               </span>
             )}
             {task.priority && (
-              <span className={`priority-${task.priority}`}>
-                <Flag size={11} />P{task.priority}
+              <span className={`priority-badge priority-${task.priority}`}>
+                <Flag size={11} />
+                {
+                  {
+                    1: "P1 · High",
+                    2: "P2 · Medium",
+                    3: "P3 · Low",
+                    4: "P4 · Lowest",
+                  }[task.priority]
+                }
               </span>
             )}
           </span>

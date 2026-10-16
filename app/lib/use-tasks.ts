@@ -99,6 +99,17 @@ export function useTasks() {
     }));
   }
 
+  function setTaskCompletion(id: string, completedAt: string | null) {
+    commit((current) => ({
+      ...current,
+      tasks: current.tasks.map((task) =>
+        task.id === id
+          ? { ...task, completedAt, updatedAt: new Date().toISOString() }
+          : task,
+      ),
+    }));
+  }
+
   function deleteTask(id: string) {
     commit((current) => ({
       ...current,
@@ -137,6 +148,7 @@ export function useTasks() {
     storageError,
     saveTask,
     toggleTask,
+    setTaskCompletion,
     deleteTask,
     saveProject,
     deleteProject,
