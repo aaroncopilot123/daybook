@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUpRight,
@@ -36,12 +36,12 @@ import { TaskRow } from "./task-row";
 import { TaskComposer } from "./task-composer";
 import { Dialog } from "./dialog";
 
-type Composer = { initial: TaskDraft; id?: string; inline?: boolean };
+type Composer = { initial: TaskDraft; id?: string };
 type Confirmation = { title: string; message: string; action: () => void };
-const blankDraft = (): TaskDraft => ({
+const blankDraft = (view: View): TaskDraft => ({
   title: "",
   description: "",
-  dueDate: null,
+  dueDate: view === "upcoming" ? null : localDate(),
   projectId: null,
   priority: null,
 });
@@ -79,6 +79,12 @@ export default function TaskApp() {
     setUndoCompletion(null);
   }
   const [prioritySort, setPrioritySort] = useState(false);
+  const addTask = useCallback((global = false) => {
+    const initial = blankDraft(view);
+    if (!global) initial.projectId = selectedProjectId;
+    setComposer({ initial });
+    setDrawer(false);
+  }, [view, selectedProjectId]);
 
   useEffect(() => {
     const update = () => setToday(localDate());
@@ -114,11 +120,11 @@ export default function TaskApp() {
       if (element.closest("input, textarea, select, [contenteditable='true']"))
         return;
       event.preventDefault();
-      setComposer({ initial: blankDraft() });
+      addTask(true);
     };
     window.addEventListener("keydown", keydown);
     return () => window.removeEventListener("keydown", keydown);
-  }, [store.ready]);
+  }, [store.ready, addTask]);
 
   const title = {
     all: "All tasks",
@@ -179,18 +185,6 @@ export default function TaskApp() {
     setDrawer(false);
     setComposer(null);
     if (view === "projects") setView("all");
-  }
-  function addTask(global = false) {
-    const initial = blankDraft();
-    if (!global) {
-      initial.projectId = selectedProjectId;
-      initial.dueDate = view === "today" ? localDate() : null;
-    }
-    setComposer({
-      initial,
-      inline: !global && window.matchMedia("(min-width: 768px)").matches,
-    });
-    setDrawer(false);
   }
   function editTask(task: Task) {
     setComposer({
@@ -602,7 +596,7 @@ export default function TaskApp() {
                   ) : (
                     renderTasks(visibleTasks)
                   )}
-                  {visibleTasks.length === 0 && !composer?.inline && (
+                  {visibleTasks.length === 0 && (
                     <div className="empty-state">
                       <span>
                         {view === "history" ? (
@@ -633,23 +627,6 @@ export default function TaskApp() {
                       </p>
                     </div>
                   )}
-                  {view !== "history" &&
-                    (composer?.inline ? (
-                      <TaskComposer
-                        initial={composer.initial}
-                        projects={store.projects}
-                        onSave={saveTask}
-                        onCancel={() => setComposer(null)}
-                      />
-                    ) : (
-                      <button className="inline-add" onClick={() => addTask()}>
-                        <Plus size={18} />
-                        <span>Add task</span>
-                        <span className="add-hint">
-                          Make room for what matters
-                        </span>
-                      </button>
-                    ))}
                 </>
               )}
               <footer className="content-footer">
@@ -681,7 +658,7 @@ export default function TaskApp() {
           <Sidebar {...sidebarProps} onClose={() => setDrawer(false)} />
         </Dialog>
       )}
-      {composer && !composer.inline && (
+      {composer && (
         <Dialog
           title={composer.id ? "Edit task" : "Add task"}
           className="composer-dialog"

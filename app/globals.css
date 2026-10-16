@@ -919,24 +919,6 @@ h1 {
 .menu-popover .danger-text {
   color: var(--error-text);
 }
-.inline-add {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  width: 100%;
-  margin-top: 7px;
-  padding: 14px 6px;
-  border-radius: 6px;
-  font-size: 12px;
-  color: var(--muted);
-}
-.inline-add svg {
-  color: var(--accent-text);
-}
-.inline-add:hover {
-  color: var(--accent-text);
-  background: var(--add-hover);
-}
 .add-hint {
   margin-left: auto;
   color: var(--muted);
