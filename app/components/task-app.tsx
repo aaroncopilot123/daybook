@@ -9,6 +9,7 @@ import {
   ChevronRight,
   CircleCheck,
   Hash,
+  Layers2,
   ListTodo,
   History,
   Menu,
@@ -125,6 +126,13 @@ export default function TaskApp() {
     upcoming: "Upcoming",
     history: "History",
     projects: "My projects",
+  }[view];
+  const HeadingIcon = {
+    all: ListTodo,
+    today: Sun,
+    upcoming: CalendarDays,
+    history: History,
+    projects: Layers2,
   }[view];
   const visibleTasks = store.tasks
     .filter((task) => matchesView(task, view, today, selectedProjectId))
@@ -355,11 +363,12 @@ export default function TaskApp() {
               <div className="page-heading">
                 <h1>
                   {title}
-                  {view === "today" && (
-                    <span className="heading-sun">
-                      <Sun size={27} strokeWidth={1.5} />
-                    </span>
-                  )}
+                  <span
+                    className={`heading-icon${view === "today" ? " heading-icon-today" : ""}`}
+                    aria-hidden="true"
+                  >
+                    <HeadingIcon size={27} strokeWidth={1.5} />
+                  </span>
                 </h1>
                 <div className="heading-actions">
                   {view !== "history" && (

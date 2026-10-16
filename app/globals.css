@@ -545,9 +545,13 @@ h1 {
   margin: 0;
   overflow-wrap: anywhere;
 }
-.heading-sun {
-  color: var(--sun-text);
+.heading-icon {
+  color: var(--muted);
   display: flex;
+  flex-shrink: 0;
+}
+.heading-icon-today {
+  color: var(--sun-text);
 }
 .heading-actions {
   display: flex;
