@@ -240,7 +240,11 @@ button {
   top: 16px;
 }
 .app-shell {
+  --sidebar-width: 240px;
   min-height: 100dvh;
+}
+.app-shell.sidebar-collapsed {
+  --sidebar-width: 0px;
 }
 .desktop-sidebar {
   position: fixed;
@@ -254,7 +258,34 @@ button {
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 0 14px 20px;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  padding: 0 14px max(20px, env(safe-area-inset-bottom));
+}
+.sidebar-inner > :not(.sidebar-projects) {
+  flex-shrink: 0;
+}
+.sidebar-projects {
+  flex: 1 1 0;
+  min-height: min(120px, 30dvh);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--decoration) transparent;
+  scrollbar-gutter: stable;
+}
+.sidebar-projects:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+}
+.sidebar-projects > .nav-item {
+  flex-shrink: 0;
+}
+.sidebar-projects > .nav-item:focus-visible {
+  outline-offset: -2px;
 }
 .brand-row {
   height: 80px;
@@ -280,10 +311,6 @@ button {
 }
 .brand-dot {
   color: var(--accent-text);
-}
-.brand-decoration {
-  margin-left: auto;
-  color: var(--decoration);
 }
 .workspace-label {
   display: flex;
@@ -388,12 +415,19 @@ kbd {
 .projects-heading > button:first-child {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   font-size: 11px;
   color: var(--muted);
+  min-height: 32px;
 }
 .projects-heading .selected {
   color: var(--foreground) !important;
+}
+.projects-chevron {
+  transition: transform 150ms ease;
+}
+.projects-heading [aria-expanded="false"] .projects-chevron {
+  transform: rotate(-90deg);
 }
 .project-tone-0 {
   color: var(--project-tone-0);
@@ -437,7 +471,7 @@ kbd {
   font-size: 10px;
 }
 .main-shell {
-  margin-left: 240px;
+  margin-left: var(--sidebar-width);
 }
 .topbar {
   height: 64px;
@@ -1240,7 +1274,7 @@ select option {
 .toast {
   position: fixed;
   bottom: 24px;
-  left: calc(50% + 120px);
+  left: calc(50% + var(--sidebar-width) / 2);
   transform: translateX(-50%);
   display: flex;
   align-items: center;
@@ -1294,8 +1328,14 @@ select option {
   margin-bottom: 40px;
 }
 .mobile-menu,
+.desktop-reopen,
 .mobile-fab {
   display: none;
+}
+@media (min-width: 1024px) {
+  .desktop-reopen {
+    display: inline-flex;
+  }
 }
 .navigation-dialog > .dialog-heading {
   display: none;
@@ -1304,10 +1344,11 @@ select option {
   margin: 0;
   width: 285px;
   max-width: 85vw;
-  height: 100dvh;
+  height: min(100dvh, var(--visible-height, 100dvh));
   max-height: 100dvh;
   border-radius: 0 12px 12px 0;
   background: var(--panel);
+  overflow: hidden;
 }
 .sidebar-close {
   margin-left: auto;

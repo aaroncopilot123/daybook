@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUpRight,
@@ -50,6 +50,14 @@ export default function TaskApp() {
   const [view, setView] = useState<View>("today");
   const [today, setToday] = useState("");
   const [drawer, setDrawer] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [projectsExpanded, setProjectsExpanded] = useState(true);
+  const reopenNavigation = useRef<HTMLButtonElement>(null);
+  const desktopNavigation = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!sidebarOpen) reopenNavigation.current?.focus();
+  }, [sidebarOpen]);
   const [composer, setComposer] = useState<Composer | null>(null);
   const [projectEditor, setProjectEditor] = useState<{
     id?: string;
@@ -247,6 +255,8 @@ export default function TaskApp() {
     );
   }
   const sidebarProps = {
+    projectsExpanded,
+    onToggleProjects: () => setProjectsExpanded((expanded) => !expanded),
     view,
     navigate,
     tasks: store.tasks,
@@ -262,16 +272,41 @@ export default function TaskApp() {
   };
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${sidebarOpen ? "" : " sidebar-collapsed"}`}>
       <a href="#main-content" className="skip-link">
         Skip to tasks
       </a>
-      <aside className="desktop-sidebar">
-        <Sidebar {...sidebarProps} />
+      <aside
+        ref={desktopNavigation}
+        id="desktop-navigation"
+        className="desktop-sidebar"
+        hidden={!sidebarOpen}
+      >
+        <Sidebar {...sidebarProps} onCollapse={() => setSidebarOpen(false)} />
       </aside>
       <div className="main-shell">
         <header className="topbar">
           <div className="breadcrumb">
+            {!sidebarOpen && (
+              <button
+                ref={reopenNavigation}
+                type="button"
+                className="icon-button desktop-reopen"
+                aria-label="Expand navigation"
+                aria-controls="desktop-navigation"
+                aria-expanded={false}
+                onClick={() => {
+                  setSidebarOpen(true);
+                  window.requestAnimationFrame(() => {
+                    desktopNavigation.current
+                      ?.querySelector<HTMLButtonElement>("button")
+                      ?.focus();
+                  });
+                }}
+              >
+                <Menu size={20} />
+              </button>
+            )}
             <button
               className="icon-button mobile-menu"
               aria-label="Open navigation"

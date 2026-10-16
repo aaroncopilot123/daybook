@@ -1,5 +1,6 @@
 "use client";
 
+import { useId } from "react";
 import {
   CalendarDays,
   CheckCheck,
@@ -25,6 +26,9 @@ export function Sidebar({
   onAddTask,
   onAddProject,
   onClose,
+  onCollapse,
+  projectsExpanded,
+  onToggleProjects,
   selectedProjectId,
   onSelectProject,
 }: {
@@ -36,9 +40,13 @@ export function Sidebar({
   onAddTask: () => void;
   onAddProject: () => void;
   onClose?: () => void;
+  onCollapse?: () => void;
+  projectsExpanded: boolean;
+  onToggleProjects: () => void;
   selectedProjectId: string | null;
   onSelectProject: (id: string | null) => void;
 }) {
+  const projectsId = useId();
   const links = [
     { id: "all" as const, label: "All tasks", Icon: ListTodo },
     { id: "today" as const, label: "Today", Icon: Sun },
@@ -63,11 +71,16 @@ export function Sidebar({
             <X size={18} />
           </button>
         ) : (
-          <ChevronsLeft
-            size={15}
-            className="brand-decoration"
-            aria-hidden="true"
-          />
+          <button
+            type="button"
+            className="icon-button sidebar-close"
+            aria-label="Collapse navigation"
+            aria-controls="desktop-navigation"
+            aria-expanded={true}
+            onClick={onCollapse}
+          >
+            <ChevronsLeft size={18} />
+          </button>
         )}
       </div>
       <div className="workspace-label">
@@ -105,10 +118,13 @@ export function Sidebar({
       </nav>
       <div className="projects-heading">
         <button
-          onClick={() => navigate("projects")}
+          type="button"
+          onClick={onToggleProjects}
+          aria-expanded={projectsExpanded}
+          aria-controls={projectsId}
           className={view === "projects" ? "selected" : ""}
         >
-          <ChevronDown size={13} />
+          <ChevronDown size={13} className="projects-chevron" />
           My projects
         </button>
         <button
@@ -119,7 +135,12 @@ export function Sidebar({
           <Plus size={15} />
         </button>
       </div>
-      <nav aria-label="Projects">
+      <nav
+        id={projectsId}
+        className="sidebar-projects"
+        aria-label="Projects"
+        hidden={!projectsExpanded}
+      >
         <button
           className={`nav-item ${selectedProjectId === null ? "active" : ""}`}
           onClick={() => onSelectProject(null)}
