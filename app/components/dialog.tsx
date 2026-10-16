@@ -53,6 +53,11 @@ export function Dialog({
       aria-label={title}
       onCancel={(event) => {
         event.preventDefault();
+        const popup = event.currentTarget.querySelector<HTMLElement>("[popover]:popover-open");
+        if (popup) {
+          popup.hidePopover();
+          return;
+        }
         onClose();
       }}
       onClick={(event) => {

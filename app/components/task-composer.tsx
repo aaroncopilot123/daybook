@@ -9,6 +9,7 @@ import {
   type Project,
   type TaskDraft,
 } from "../lib/tasks";
+import { AppSelect } from "./app-select";
 
 export function TaskComposer({
   initial,
@@ -144,45 +145,31 @@ export function TaskComposer({
       </div>
       <div className="composer-footer">
         <div className="composer-selects">
-          <label className="select-wrap">
-            {draft.projectId ? <Hash size={15} /> : <Inbox size={15} />}
-            <select
-              aria-label="Project"
-              value={draft.projectId ?? ""}
-              onChange={(event) =>
-                update({ projectId: event.target.value || null })
-              }
-            >
-              <option value="">No project</option>
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={`select-wrap priority-${draft.priority ?? 0}`}>
-            <Flag size={15} />
-            <select
-              aria-label="Priority"
-              value={draft.priority ?? ""}
-              onChange={(event) =>
-                update({
-                  priority: event.target.value
-                    ? (Number(event.target.value) as Priority)
-                    : null,
-                })
-              }
-            >
-              <option value="">Priority</option>
-              {[1, 2, 3, 4].map((p) => (
-                <option key={p} value={p}>
-                  P{p}
-                  {p === 1 ? " · High" : p === 4 ? " · Low" : ""}
-                </option>
-              ))}
-            </select>
-          </label>
+          <AppSelect
+            label="Project"
+            value={draft.projectId ?? ""}
+            onChange={(value) => update({ projectId: value || null })}
+            icon={draft.projectId ? <Hash size={15} aria-hidden="true" /> : <Inbox size={15} aria-hidden="true" />}
+            options={[
+              { value: "", label: "No project" },
+              ...projects.map((project) => ({ value: project.id, label: project.name })),
+            ]}
+          />
+          <AppSelect
+            label="Priority"
+            className={`priority-${draft.priority ?? 0}`}
+            value={draft.priority?.toString() ?? ""}
+            onChange={(value) => update({ priority: value ? Number(value) as Priority : null })}
+            icon={<Flag size={15} aria-hidden="true" />}
+            options={[
+              { value: "", label: "Priority" },
+              ...[1, 2, 3, 4].map((priority) => ({
+                value: priority.toString(),
+                label: `P${priority}${priority === 1 ? " · High" : priority === 4 ? " · Low" : ""}`,
+                className: `priority-${priority}`,
+              })),
+            ]}
+          />
         </div>
         <div className="composer-buttons">
           <button type="button" className="button secondary" onClick={onCancel}>
