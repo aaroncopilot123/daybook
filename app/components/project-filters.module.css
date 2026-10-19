@@ -1,0 +1,41 @@
+.project-filters {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 4px 10px;
+  margin: 0 -4px 16px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hover) transparent;
+}
+.project-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-height: 36px;
+  max-width: 220px;
+  padding: 7px 12px;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  color: var(--secondary);
+  font-size: 12px;
+}
+.project-filter > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-filter:hover {
+  background: var(--hover);
+  color: var(--foreground);
+}
+.project-filter.selected {
+  color: var(--selected-text);
+  background: var(--selected-bg);
+  border-color: var(--selected-border);
+}
+@media (max-width: 767px) {
+  .project-filter {
+    min-height: 44px;
+  }
+}

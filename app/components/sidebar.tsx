@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { matchesView, type Project, type Task, type View } from "../lib/tasks";
+import styles from "./sidebar.module.css";
 
 export function Sidebar({
   view,
@@ -53,17 +54,17 @@ export function Sidebar({
     { id: "history" as const, label: "History", Icon: History },
   ];
   return (
-    <div className="sidebar-inner">
-      <div className="brand-row">
-        <span className="brand-symbol">
+    <div className={styles["sidebar-inner"]}>
+      <div className={styles["brand-row"]}>
+        <span className={styles["brand-symbol"]}>
           <CheckCheck size={20} strokeWidth={2} />
         </span>
-        <span className="brand-name">
-          daybook<span className="brand-dot">.</span>
+        <span className={styles["brand-name"]}>
+          daybook<span className={styles["brand-dot"]}>.</span>
         </span>
         {onClose ? (
           <button
-            className="icon-button sidebar-close"
+            className={`icon-button ${styles["sidebar-close"]}`}
             aria-label="Close navigation"
             onClick={onClose}
           >
@@ -72,7 +73,7 @@ export function Sidebar({
         ) : (
           <button
             type="button"
-            className="icon-button sidebar-close"
+            className={`icon-button ${styles["sidebar-close"]}`}
             aria-label="Collapse navigation"
             aria-controls="desktop-navigation"
             aria-expanded={true}
@@ -82,14 +83,14 @@ export function Sidebar({
           </button>
         )}
       </div>
-      <div className="workspace-label">
-        <span className="avatar">H</span>
+      <div className={styles["workspace-label"]}>
+        <span className={styles.avatar}>H</span>
         <span>
           My workspace
-          <span className="workspace-subtitle">A little more intentional.</span>
+          <span className={styles["workspace-subtitle"]}>A little more intentional.</span>
         </span>
       </div>
-      <button className="sidebar-add" onClick={onAddTask}>
+      <button className={styles["sidebar-add"]} onClick={onAddTask}>
         <span>
           <Plus size={16} />
         </span>
@@ -99,13 +100,13 @@ export function Sidebar({
         {links.map(({ id, label, Icon }) => (
           <button
             key={id}
-            className={`nav-item ${view === id ? "active" : ""}`}
+            className={`${styles["nav-item"]} ${view === id ? styles.active : ""}`}
             onClick={() => navigate(id)}
             aria-current={view === id ? "page" : undefined}
           >
             <Icon size={18} />
             <span>{label}</span>
-            <span className="nav-count">
+            <span className={styles["nav-count"]}>
               {
                 tasks.filter((task) =>
                   matchesView(task, id, today, selectedProjectId),
@@ -115,15 +116,15 @@ export function Sidebar({
           </button>
         ))}
       </nav>
-      <div className="projects-heading">
+      <div className={styles["projects-heading"]}>
         <button
           type="button"
           onClick={onToggleProjects}
           aria-expanded={projectsExpanded}
           aria-controls={projectsId}
-          className={view === "projects" ? "selected" : ""}
+          className={view === "projects" ? styles.selected : ""}
         >
-          <ChevronDown size={13} className="projects-chevron" />
+          <ChevronDown size={13} className={styles["projects-chevron"]} />
           My projects
         </button>
         <button
@@ -136,18 +137,18 @@ export function Sidebar({
       </div>
       <nav
         id={projectsId}
-        className="sidebar-projects"
+        className={styles["sidebar-projects"]}
         aria-label="Projects"
         hidden={!projectsExpanded}
       >
         <button
-          className={`nav-item ${selectedProjectId === null ? "active" : ""}`}
+          className={`${styles["nav-item"]} ${selectedProjectId === null ? styles.active : ""}`}
           onClick={() => onSelectProject(null)}
           aria-pressed={selectedProjectId === null}
         >
           <Layers2 size={17} />
           <span>All projects</span>
-          <span className="nav-count">
+          <span className={styles["nav-count"]}>
             {
               tasks.filter((task) =>
                 matchesView(task, view === "projects" ? "all" : view, today),
@@ -158,13 +159,13 @@ export function Sidebar({
         {projects.map((project, index) => (
           <button
             key={project.id}
-            className={`nav-item ${selectedProjectId === project.id ? "active" : ""}`}
+            className={`${styles["nav-item"]} ${selectedProjectId === project.id ? styles.active : ""}`}
             onClick={() => onSelectProject(project.id)}
             aria-pressed={selectedProjectId === project.id}
           >
-            <Hash size={17} className={`project-tone-${index % 3}`} />
-            <span className="nav-project-name">{project.name}</span>
-            <span className="nav-count">
+            <Hash size={17} className={styles[`project-tone-${index % 3}`]} />
+            <span className={styles["nav-project-name"]}>{project.name}</span>
+            <span className={styles["nav-count"]}>
               {
                 tasks.filter((task) =>
                   matchesView(
@@ -179,7 +180,7 @@ export function Sidebar({
           </button>
         ))}
         <button
-          className="nav-item browse-projects"
+          className={`${styles["nav-item"]} ${styles["browse-projects"]}`}
           onClick={() => navigate("projects")}
         >
           <Layers2 size={16} />

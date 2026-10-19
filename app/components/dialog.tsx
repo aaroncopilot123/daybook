@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
+import styles from "./dialog.module.css";
 
 const modalSessions = new Map<HTMLDialogElement, HTMLElement | null>();
 let previousBodyOverflow = "";
@@ -40,16 +41,18 @@ export function Dialog({
   children,
   onClose,
   className = "",
+  variant,
   open = true,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   className?: string;
+  variant?: "navigation";
   open?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
-  const animated = className.split(" ").includes("navigation-dialog");
+  const animated = variant === "navigation";
   useEffect(() => {
     const dialog = ref.current;
     const viewport = window.visualViewport;
@@ -123,7 +126,7 @@ export function Dialog({
   return (
     <dialog
       ref={ref}
-      className={`app-dialog ${className}`}
+      className={`${styles["app-dialog"]} ${animated ? styles["navigation-dialog"] : ""} ${className}`}
       aria-label={title}
       onCancel={(event) => {
         event.preventDefault();
@@ -147,7 +150,7 @@ export function Dialog({
         }
       }}
     >
-      <div className="dialog-heading">
+      <div className={styles["dialog-heading"]}>
         <h2>{title}</h2>
         <button
           className="icon-button"

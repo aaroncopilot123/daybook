@@ -1,0 +1,80 @@
+.app-select {
+  min-width: 0;
+  max-width: 180px;
+  background: transparent;
+}
+.select-trigger {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  min-height: 34px;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--secondary);
+  font-size: 11px;
+}
+.select-trigger > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.select-trigger > svg {
+  flex-shrink: 0;
+}
+.select-trigger:hover,
+.select-trigger[aria-expanded="true"] {
+  background: var(--hover);
+  border-color: var(--border);
+}
+.inherit-color .select-trigger {
+  color: inherit;
+}
+.select-popover {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 5px;
+  max-height: 280px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--raised);
+  color: var(--foreground);
+  box-shadow: 0 8px 24px var(--popover-shadow);
+}
+.select-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+  padding: 8px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  background: transparent;
+  cursor: pointer;
+}
+.select-option > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.select-option > svg {
+  flex-shrink: 0;
+  color: var(--accent-text);
+}
+.select-option.is-active {
+  background: var(--control-hover);
+}
+.select-option[aria-selected="true"] {
+  background: var(--selected-bg);
+}
+@media (max-width: 767px) {
+  .select-trigger,
+  .select-option {
+    font-size: 14px;
+    min-height: 44px;
+  }
+}

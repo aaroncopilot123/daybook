@@ -10,6 +10,7 @@ import {
   type TaskDraft,
 } from "../lib/tasks";
 import { AppSelect } from "./app-select";
+import styles from "./task-composer.module.css";
 
 export function TaskComposer({
   initial,
@@ -36,7 +37,7 @@ export function TaskComposer({
 
   return (
     <form
-      className="task-composer"
+      className={styles["task-composer"]}
       onSubmit={(event) => {
         event.preventDefault();
         if (!draft.title.trim()) {
@@ -61,7 +62,7 @@ export function TaskComposer({
         }
       }}
     >
-      <div className="composer-body">
+      <div className={styles["composer-body"]}>
         <label htmlFor={`${id}-title`} className="sr-only">
           Task name
         </label>
@@ -69,7 +70,7 @@ export function TaskComposer({
           data-initial-focus
           ref={titleRef}
           id={`${id}-title`}
-          className="task-title-input"
+          className={styles["task-title-input"]}
           placeholder="What would you like to get done?"
           maxLength={500}
           value={draft.title}
@@ -85,18 +86,16 @@ export function TaskComposer({
         </label>
         <textarea
           id={`${id}-description`}
-          className="description-input"
+          className={styles["description-input"]}
           placeholder="Add a description…"
           value={draft.description}
           onChange={(event) => update({ description: event.target.value })}
           rows={2}
         />
-        <div className="date-shortcuts" aria-label="Due date shortcuts">
+        <div className={styles["date-shortcuts"]} aria-label="Due date shortcuts">
           <button
             type="button"
-            className={
-              draft.dueDate === localDate() ? "date-chip selected" : "date-chip"
-            }
+            className={`${styles["date-chip"]} ${draft.dueDate === localDate() ? styles.selected : ""}`}
             onClick={() => update({ dueDate: localDate() })}
           >
             <CalendarDays size={14} />
@@ -104,17 +103,13 @@ export function TaskComposer({
           </button>
           <button
             type="button"
-            className={
-              draft.dueDate === localDate(1)
-                ? "date-chip selected"
-                : "date-chip"
-            }
+            className={`${styles["date-chip"]} ${draft.dueDate === localDate(1) ? styles.selected : ""}`}
             onClick={() => update({ dueDate: localDate(1) })}
           >
             Tomorrow
           </button>
           <label
-            className={`date-chip date-picker ${draft.dueDate && draft.dueDate !== localDate() && draft.dueDate !== localDate(1) ? "selected" : ""}`}
+            className={`${styles["date-chip"]} ${styles["date-picker"]} ${draft.dueDate && draft.dueDate !== localDate() && draft.dueDate !== localDate(1) ? styles.selected : ""}`}
           >
             <span>Choose date</span>
             <input
@@ -129,7 +124,7 @@ export function TaskComposer({
           {draft.dueDate && (
             <button
               type="button"
-              className="date-chip"
+              className={styles["date-chip"]}
               onClick={() => update({ dueDate: null })}
             >
               <X size={13} />
@@ -138,15 +133,16 @@ export function TaskComposer({
           )}
         </div>
         {error && (
-          <p id={`${id}-error`} role="alert" className="form-error">
+          <p id={`${id}-error`} role="alert" className={styles["form-error"]}>
             {error}
           </p>
         )}
       </div>
-      <div className="composer-footer">
-        <div className="composer-selects">
+      <div className={styles["composer-footer"]}>
+        <div className={styles["composer-selects"]}>
           <AppSelect
             label="Project"
+            className={styles["composer-select"]}
             value={draft.projectId ?? ""}
             onChange={(value) => update({ projectId: value || null })}
             icon={draft.projectId ? <Hash size={15} aria-hidden="true" /> : <Inbox size={15} aria-hidden="true" />}
@@ -157,7 +153,8 @@ export function TaskComposer({
           />
           <AppSelect
             label="Priority"
-            className={`priority-${draft.priority ?? 0}`}
+            className={`${styles["composer-select"]} ${draft.priority ? styles[`priority-${draft.priority}`] : ""}`}
+            inheritColor
             value={draft.priority?.toString() ?? ""}
             onChange={(value) => update({ priority: value ? Number(value) as Priority : null })}
             icon={<Flag size={15} aria-hidden="true" />}
@@ -166,12 +163,12 @@ export function TaskComposer({
               ...[1, 2, 3, 4].map((priority) => ({
                 value: priority.toString(),
                 label: `P${priority}${priority === 1 ? " · High" : priority === 4 ? " · Low" : ""}`,
-                className: `priority-${priority}`,
+                className: styles[`priority-${priority}`],
               })),
             ]}
           />
         </div>
-        <div className="composer-buttons">
+        <div className={styles["composer-buttons"]}>
           <button type="button" className="button secondary" onClick={onCancel}>
             Cancel
           </button>

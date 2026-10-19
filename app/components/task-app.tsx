@@ -34,6 +34,9 @@ import { TaskRow } from "./task-row";
 import { TaskComposer } from "./task-composer";
 import { Dialog } from "./dialog";
 import { TaskSection } from "./task-section";
+import styles from "./task-app.module.css";
+import sectionStyles from "./task-section.module.css";
+import sidebarStyles from "./sidebar.module.css";
 
 type Composer = { initial: TaskDraft; id?: string };
 type Confirmation = { title: string; message: string; action: () => void };
@@ -238,7 +241,7 @@ export default function TaskApp() {
   }
   function renderTasks(tasks: Task[]) {
     return (
-      <ul className="task-list">
+      <ul className={sectionStyles["task-list"]}>
         {tasks.map((task) => (
           <TaskRow
             key={task.id}
@@ -280,27 +283,27 @@ export default function TaskApp() {
   };
 
   return (
-    <div className={`app-shell${sidebarOpen ? "" : " sidebar-collapsed"}`}>
+    <div className={`${styles["app-shell"]} ${sidebarOpen ? "" : styles["sidebar-collapsed"]}`}>
       <a href="#main-content" className="skip-link">
         Skip to tasks
       </a>
       <aside
         ref={desktopNavigation}
         id="desktop-navigation"
-        className="desktop-sidebar"
+        className={styles["desktop-sidebar"]}
         inert={!sidebarOpen}
         aria-hidden={!sidebarOpen}
       >
         <Sidebar {...sidebarProps} onCollapse={() => setSidebarOpen(false)} />
       </aside>
-      <div className="main-shell">
-        <header className="topbar">
-          <div className="breadcrumb">
+      <div className={styles["main-shell"]}>
+        <header className={styles.topbar}>
+          <div className={styles.breadcrumb}>
             {!sidebarOpen && (
               <button
                 ref={reopenNavigation}
                 type="button"
-                className="icon-button desktop-reopen"
+                className={`icon-button ${styles["desktop-reopen"]}`}
                 aria-label="Expand navigation"
                 aria-controls="desktop-navigation"
                 aria-expanded={false}
@@ -317,7 +320,7 @@ export default function TaskApp() {
               </button>
             )}
             <button
-              className="icon-button mobile-menu"
+              className={`icon-button ${styles["mobile-menu"]}`}
               aria-label="Open navigation"
               onClick={() => setDrawer(true)}
             >
@@ -325,32 +328,32 @@ export default function TaskApp() {
             </button>
             <span>My workspace</span>
             <ChevronRight size={13} />
-            <span className="breadcrumb-current">{title}</span>
+            <span className={styles["breadcrumb-current"]}>{title}</span>
           </div>
-          <div className="header-actions">
-            <span className="topbar-right">
-              <span className="status-dot" />
+          <div className={styles["header-actions"]}>
+            <span className={styles["topbar-right"]}>
+              <span className={styles["status-dot"]} />
               Personal workspace
             </span>
             <ThemeToggle />
           </div>
         </header>
-        <main id="main-content" className="main-content" tabIndex={-1}>
+        <main id="main-content" className={styles["main-content"]} tabIndex={-1}>
           {store.storageError && (
-            <div role="alert" className="storage-error">
+            <div role="alert" className={styles["storage-error"]}>
               {store.storageError}
             </div>
           )}
           {!store.ready || !today ? (
             <div className="loading-state" role="status">
-              <div className="skeleton skeleton-title" />
-              <div className="skeleton" />
-              <div className="skeleton" />
+              <div className={`${styles.skeleton} ${styles["skeleton-title"]}`} />
+              <div className={styles.skeleton} />
+              <div className={styles.skeleton} />
               <span className="sr-only">Loading your tasks</span>
             </div>
           ) : (
             <>
-              <div className="page-eyebrow">
+              <div className={styles["page-eyebrow"]}>
                 {view === "today"
                   ? dateHeading
                   : view === "all"
@@ -361,20 +364,20 @@ export default function TaskApp() {
                         ? "A little progress, remembered"
                         : "Your ideas, a little more organized"}
               </div>
-              <div className="page-heading">
+              <div className={styles["page-heading"]}>
                 <h1>
                   {title}
                   <span
-                    className={`heading-icon${view === "today" ? " heading-icon-today" : ""}`}
+                    className={`${styles["heading-icon"]} ${view === "today" ? styles["heading-icon-today"] : ""}`}
                     aria-hidden="true"
                   >
                     <HeadingIcon size={27} strokeWidth={1.5} />
                   </span>
                 </h1>
-                <div className="heading-actions">
+                <div className={styles["heading-actions"]}>
                   {view !== "history" && (
                     <button
-                      className="button primary desktop-add"
+                      className={`button primary ${styles["desktop-add"]}`}
                       onClick={() =>
                         view === "projects"
                           ? setProjectEditor({ name: "" })
@@ -387,7 +390,7 @@ export default function TaskApp() {
                   )}
                 </div>
               </div>
-              <p className="page-subtitle">
+              <p className={styles["page-subtitle"]}>
                 {view === "today"
                   ? "A fresh start. Let’s make it a good one."
                   : view === "all"
@@ -401,11 +404,11 @@ export default function TaskApp() {
                           : "Small steps, meaningful progress."}
               </p>
               {view === "today" && (
-                <div className="daily-progress">
-                  <div className="progress-icon">
+                <div className={styles["daily-progress"]}>
+                  <div className={styles["progress-icon"]}>
                     <CircleCheck size={20} strokeWidth={1.5} />
                   </div>
-                  <div className="progress-copy">
+                  <div className={styles["progress-copy"]}>
                     <span>Due today</span>
                     <span>
                       {todayTasks.length === 0
@@ -415,7 +418,7 @@ export default function TaskApp() {
                     </span>
                   </div>
                   <div
-                    className="progress-track"
+                    className={styles["progress-track"]}
                     role="progressbar"
                     aria-label="Today's completion"
                     aria-valuetext={`${todayCompleted} of ${todayTasks.length} tasks due today completed; overdue tasks excluded`}
@@ -425,22 +428,22 @@ export default function TaskApp() {
                   >
                     <span style={{ width: `${progress}%` }} />
                   </div>
-                  <span className="progress-number">{progress}%</span>
+                  <span className={styles["progress-number"]}>{progress}%</span>
                 </div>
               )}
               {view === "projects" ? (
-                <div className="project-list">
+                <div className={styles["project-list"]}>
                   {store.projects.map((project, index) => (
-                    <div className="project-card" key={project.id}>
+                    <div className={styles["project-card"]} key={project.id}>
                       <button
-                        className="project-card-main"
+                        className={styles["project-card-main"]}
                         onClick={() => {
                           selectProject(project.id);
                           setView("all");
                         }}
                       >
                         <span
-                          className={`project-icon project-tone-${index % 3}`}
+                          className={`${styles["project-icon"]} ${sidebarStyles[`project-tone-${index % 3}`]}`}
                         >
                           <Hash size={20} />
                         </span>
@@ -459,7 +462,7 @@ export default function TaskApp() {
                         </span>
                         <ArrowUpRight size={17} />
                       </button>
-                      <div className="project-card-actions">
+                      <div className={styles["project-card-actions"]}>
                         <button
                           className="icon-button"
                           aria-label={`Rename ${project.name}`}
@@ -485,11 +488,11 @@ export default function TaskApp() {
                     selectedProjectId={selectedProjectId}
                     onSelect={selectProject}
                   />
-                  <div className="list-toolbar">
+                  <div className={styles["list-toolbar"]}>
                     <span>
                       {visibleTasks.length}{" "}
                       {visibleTasks.length === 1 ? "task" : "tasks"}
-                      <span className="toolbar-dot">·</span>
+                      <span className={styles["toolbar-dot"]}>·</span>
                       {view === "today"
                         ? "You’ve got this"
                         : "One thing at a time"}
@@ -498,7 +501,7 @@ export default function TaskApp() {
                       <span>Newest completed first</span>
                     ) : (
                       <button
-                        className={`sort-button ${prioritySort ? "sort-active" : ""}`}
+                        className={`${styles["sort-button"]} ${prioritySort ? styles["sort-active"] : ""}`}
                         aria-pressed={prioritySort}
                         onClick={() => setPrioritySort((value) => !value)}
                       >
@@ -536,8 +539,8 @@ export default function TaskApp() {
                     [...new Set(visibleTasks.map((task) => task.dueDate!))]
                       .sort()
                       .map((date) => (
-                        <section className="task-section" key={date}>
-                          <h2 className="section-heading">
+                        <section className={sectionStyles["task-section"]} key={date}>
+                          <h2 className={sectionStyles["section-heading"]}>
                             {dateLabel(date)}
                             <span>
                               {
@@ -546,7 +549,7 @@ export default function TaskApp() {
                                 ).length
                               }
                             </span>
-                            <span className="section-date">
+                            <span className={sectionStyles["section-date"]}>
                               {new Date(`${date}T12:00:00`).toLocaleDateString(
                                 "en",
                                 { weekday: "long" },
@@ -564,7 +567,7 @@ export default function TaskApp() {
                     renderTasks(visibleTasks)
                   )}
                   {visibleTasks.length === 0 && view !== "today" && (
-                    <div className="empty-state">
+                    <div className={styles["empty-state"]}>
                       <span>
                         {view === "history" ? (
                           <History size={27} />
@@ -590,16 +593,16 @@ export default function TaskApp() {
                   )}
                 </>
               )}
-              <footer className="content-footer">
-                <span className="footer-line" />
-                <span className="footer-line" />
+              <footer className={styles["content-footer"]}>
+                <span className={styles["footer-line"]} />
+                <span className={styles["footer-line"]} />
               </footer>
             </>
           )}
         </main>
         {store.ready && view !== "history" && (
           <button
-            className="mobile-fab"
+            className={styles["mobile-fab"]}
             aria-label={view === "projects" ? "New project" : "Add task"}
             onClick={() =>
               view === "projects" ? setProjectEditor({ name: "" }) : addTask()
@@ -612,7 +615,7 @@ export default function TaskApp() {
       <Dialog
         open={drawer}
         title="Your workspace"
-        className="navigation-dialog"
+        variant="navigation"
         onClose={() => setDrawer(false)}
       >
         <Sidebar {...sidebarProps} onClose={() => setDrawer(false)} />
@@ -620,7 +623,6 @@ export default function TaskApp() {
       {composer && (
         <Dialog
           title={composer.id ? "Edit task" : "Add task"}
-          className="composer-dialog"
           onClose={() => setComposer(null)}
         >
           <TaskComposer
@@ -638,7 +640,7 @@ export default function TaskApp() {
           onClose={() => setProjectEditor(null)}
         >
           <form
-            className="project-form"
+            className={styles["project-form"]}
             onSubmit={(event) => {
               event.preventDefault();
               if (!projectEditor.name.trim()) return;
@@ -667,7 +669,7 @@ export default function TaskApp() {
               }
             />
             <p>Keep related tasks together in one simple space.</p>
-            <div className="dialog-actions">
+            <div className={styles["dialog-actions"]}>
               <button
                 type="button"
                 className="button secondary"
@@ -690,9 +692,9 @@ export default function TaskApp() {
           title={confirmation.title}
           onClose={() => setConfirmation(null)}
         >
-          <div className="confirmation-body">
+          <div className={styles["confirmation-body"]}>
             <p>{confirmation.message}</p>
-            <div className="dialog-actions">
+            <div className={styles["dialog-actions"]}>
               <button
                 className="button secondary"
                 data-initial-focus
@@ -715,12 +717,12 @@ export default function TaskApp() {
         </Dialog>
       )}
       {notice && (
-        <div className="toast" role="status">
+        <div className={styles.toast} role="status">
           <CircleCheck size={17} />
-          <span className="toast-message">{notice}</span>
+          <span className={styles["toast-message"]}>{notice}</span>
           {undoCompletion && (
             <button
-              className="toast-undo"
+              className={styles["toast-undo"]}
               onClick={() => {
                 store.setTaskCompletion(
                   undoCompletion.id,

@@ -28,7 +28,11 @@ There is no test suite.
 
 ## Styling
 
-- Styling lives mostly in `app/globals.css` as semantic class names (`icon-button`, `select-trigger`, …) built on CSS custom properties. Dark tokens are on `:root`; light overrides are under `:root[data-theme="light"]`. Add new colors as tokens in both blocks rather than hard-coding values in components.
+- Plain CSS, not Tailwind utilities (Tailwind is imported only for its preflight reset and `sr-only`).
+- `app/globals.css` holds only truly global styles: color tokens (dark on `:root`, light under `:root[data-theme="light"]`), element base rules, and the shared primitives `.button`, `.primary`, `.secondary`, `.destructive`, `.icon-button`, `.skip-link`, which components use as plain string classes. Add new colors as tokens in both theme blocks rather than hard-coding values.
+- Each component's styles live in a CSS Module next to it (`task-row.tsx` + `task-row.module.css`), keeping kebab-case class names accessed as `styles["task-row"]`. A module's responsive `@media` overrides sit in the same file. Parents reuse a child's classes by importing its module (task-app imports `task-section.module.css` and `sidebar.module.css`).
+- When a module selector combines with a global primitive, wrap the primitive in `:global()` (e.g. `:global(.icon-button).theme-toggle`) so it keeps beating the primitive by specificity. Don't rely on the order stylesheets load in, because Next.js can order CSS differently in dev than in `next build`.
+- Keyframes are scoped too: define `@keyframes` in the module that uses them.
 - `docs/design.md` is the design system (Linear-inspired: dark-first, single indigo accent, Inter with `cv01`/`ss03` features, weight 510 for emphasis, luminance stacking for elevation, 100–200ms motion, 44px touch targets, accessibility contract). Follow it for UI work.
 
 ## Product direction

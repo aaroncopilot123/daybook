@@ -1,0 +1,172 @@
+.task-composer {
+  border: 1px solid var(--composer-border);
+  background: var(--input-bg);
+  border-radius: 9px;
+  margin: 12px 0;
+  overflow: hidden;
+}
+.composer-body {
+  padding: 19px 20px 16px;
+}
+.task-title-input {
+  width: 100%;
+  font-size: 16px;
+  font-weight: 510;
+  background: transparent;
+  border: none;
+  padding: 3px 0;
+  color: var(--foreground);
+}
+.task-title-input:focus-visible,
+.description-input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.task-title-input:focus-visible {
+  border-bottom: 1px solid var(--accent-text);
+}
+.description-input {
+  display: block;
+  resize: vertical;
+  width: 100%;
+  padding: 8px 0;
+  margin: 3px 0 12px;
+  font-size: 12px;
+  background: transparent;
+  border: none;
+  min-height: 55px;
+  color: var(--secondary);
+}
+.description-input:focus-visible {
+  outline: 1px solid var(--accent-text);
+  outline-offset: 3px;
+}
+.date-shortcuts {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.date-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--control-border);
+  background: var(--chip-bg);
+  padding: 5px 8px;
+  border-radius: 5px;
+  color: var(--secondary);
+  font-size: 11px;
+  min-height: 30px;
+}
+.date-chip:hover {
+  background: var(--chip-hover);
+}
+.date-chip.selected {
+  background: var(--chip-selected-bg);
+  border-color: var(--chip-selected-border);
+  color: var(--chip-selected-text);
+}
+.date-picker {
+  position: relative;
+}
+.date-picker input {
+  max-width: 112px;
+  font-size: 10px;
+  background: transparent;
+}
+.date-picker > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.composer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--border);
+  padding: 12px;
+}
+.composer-selects,
+.composer-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.form-error {
+  font-size: 12px;
+  margin: 12px 0 0;
+  color: var(--error-text);
+}
+.task-composer {
+  border: none;
+  margin: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.composer-body {
+  padding: 22px;
+}
+.composer-footer {
+  padding: 14px 20px;
+}
+@media (max-width: 767px) {
+  .composer-footer {
+    position: sticky;
+    bottom: 0;
+    background: var(--raised);
+  }
+  .composer-body {
+    padding: 20px 16px;
+  }
+  .task-title-input {
+    font-size: 16px;
+  }
+  .description-input {
+    font-size: 16px;
+  }
+  .date-chip {
+    min-height: 44px;
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+  .date-picker input {
+    font-size: 13px;
+    max-width: 132px;
+  }
+  .composer-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 12px 16px 18px;
+  }
+  .composer-selects {
+    gap: 16px;
+  }
+  .composer-selects .composer-select {
+    flex: 1;
+    max-width: calc(50% - 8px);
+  }
+  .composer-buttons {
+    display: flex;
+    justify-content: flex-end;
+  }
+  .composer-buttons :global(.primary) {
+    flex: 1;
+  }
+}
+/* Text-only priority tones for the priority select and its options. */
+.priority-1 {
+  color: var(--priority-high);
+}
+.priority-2 {
+  color: var(--priority-medium);
+}
+.priority-3 {
+  color: var(--priority-low);
+}
+.priority-4 {
+  color: var(--priority-lowest);
+}

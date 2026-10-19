@@ -2,16 +2,19 @@
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Check, ChevronDown } from "lucide-react";
+import styles from "./app-select.module.css";
 
 type SelectOption = { value: string; label: string; className?: string };
 
-export function AppSelect({ label, value, options, onChange, icon, className = "" }: {
+export function AppSelect({ label, value, options, onChange, icon, className = "", inheritColor = false }: {
   label: string;
   value: string;
   options: SelectOption[];
   onChange: (value: string) => void;
   icon: ReactNode;
   className?: string;
+  // Let the trigger take its colour from className, e.g. a priority tone.
+  inheritColor?: boolean;
 }) {
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);
@@ -131,7 +134,7 @@ export function AppSelect({ label, value, options, onChange, icon, className = "
   }
 
   return (
-    <div className={`app-select ${className}`}>
+    <div className={`${styles["app-select"]} ${inheritColor ? styles["inherit-color"] : ""} ${className}`}>
       <button
         ref={trigger}
         type="button"
@@ -142,7 +145,7 @@ export function AppSelect({ label, value, options, onChange, icon, className = "
         aria-controls={id}
         popoverTarget={id}
         aria-activedescendant={open ? `${id}-${active}` : undefined}
-        className="select-trigger"
+        className={styles["select-trigger"]}
         disabled={!options.length}
         onKeyDown={handleKey}
         onClick={() => {
@@ -159,7 +162,7 @@ export function AppSelect({ label, value, options, onChange, icon, className = "
         role="listbox"
         aria-label={label}
         popover="auto"
-        className="select-popover"
+        className={styles["select-popover"]}
         onToggle={(event) => {
           const expanded = event.newState === "open";
           setOpen(expanded);
@@ -172,7 +175,7 @@ export function AppSelect({ label, value, options, onChange, icon, className = "
             key={option.value}
             role="option"
             aria-selected={option.value === value}
-            className={`select-option${active === index ? " is-active" : ""} ${option.className ?? ""}`}
+            className={`${styles["select-option"]} ${active === index ? styles["is-active"] : ""} ${option.className ?? ""}`}
             onPointerMove={() => setActive(index)}
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => choose(index)}

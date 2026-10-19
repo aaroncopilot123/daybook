@@ -2,6 +2,7 @@
 
 import { Hash, Layers2 } from "lucide-react";
 import type { Project } from "../lib/tasks";
+import styles from "./project-filters.module.css";
 
 export function ProjectFilters({
   projects,
@@ -14,12 +15,12 @@ export function ProjectFilters({
 }) {
   return (
     <div
-      className="project-filters"
+      className={styles["project-filters"]}
       role="group"
       aria-label="Filter by project"
     >
       <button
-        className={`project-filter ${selectedProjectId === null ? "selected" : ""}`}
+        className={`${styles["project-filter"]} ${selectedProjectId === null ? styles.selected : ""}`}
         aria-pressed={selectedProjectId === null}
         onClick={() => onSelect(null)}
       >
@@ -29,7 +30,7 @@ export function ProjectFilters({
       {projects.map((project) => (
         <button
           key={project.id}
-          className={`project-filter ${selectedProjectId === project.id ? "selected" : ""}`}
+          className={`${styles["project-filter"]} ${selectedProjectId === project.id ? styles.selected : ""}`}
           aria-pressed={selectedProjectId === project.id}
           onClick={() => onSelect(project.id)}
         >

@@ -11,6 +11,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { dateLabel, localDate, type Project, type Task } from "../lib/tasks";
+import styles from "./task-row.module.css";
 
 export function TaskRow({
   task,
@@ -26,30 +27,30 @@ export function TaskRow({
   onDelete: () => void;
 }) {
   return (
-    <li className={`task-row ${task.completedAt ? "is-completed" : ""}`}>
+    <li className={`${styles["task-row"]} ${task.completedAt ? styles["is-completed"] : ""}`}>
       <button
-        className="completion-target"
+        className={styles["completion-target"]}
         aria-label={`${task.completedAt ? "Restore" : "Complete"} ${task.title}`}
         aria-pressed={!!task.completedAt}
         onClick={onToggle}
       >
-        <span className="completion-circle">
+        <span className={styles["completion-circle"]}>
           <Check size={12} strokeWidth={2.5} />
         </span>
       </button>
       <button
-        className="task-content"
+        className={styles["task-content"]}
         onClick={onEdit}
         aria-label={`Edit ${task.title}`}
       >
-        <span className="task-title">{task.title}</span>
+        <span className={styles["task-title"]}>{task.title}</span>
         {task.description && (
-          <span className="task-description">{task.description}</span>
+          <span className={styles["task-description"]}>{task.description}</span>
         )}
         {(task.dueDate || project || task.priority || task.completedAt) && (
-          <span className="task-metadata">
+          <span className={styles["task-metadata"]}>
             {task.completedAt && (
-              <span className="completion-date">
+              <span className={styles["completion-date"]}>
                 Completed{" "}
                 {new Date(task.completedAt).toLocaleString("en", {
                   month: "short",
@@ -64,9 +65,9 @@ export function TaskRow({
               <span
                 className={
                   !task.completedAt && task.dueDate < localDate()
-                    ? "overdue-date"
+                    ? styles["overdue-date"]
                     : task.dueDate === localDate()
-                      ? "today-date"
+                      ? styles["today-date"]
                       : ""
                 }
               >
@@ -84,7 +85,7 @@ export function TaskRow({
               </span>
             )}
             {task.priority && (
-              <span className={`priority-badge priority-${task.priority}`}>
+              <span className={`${styles["priority-badge"]} ${styles[`priority-${task.priority}`]}`}>
                 <Flag size={11} />
                 {
                   {
@@ -101,7 +102,7 @@ export function TaskRow({
       </button>
       {task.completedAt && (
         <button
-          className="restore-button"
+          className={styles["restore-button"]}
           aria-label={`Restore ${task.title} to incomplete`}
           onClick={onToggle}
         >
@@ -110,7 +111,7 @@ export function TaskRow({
         </button>
       )}
       <details
-        className="row-menu"
+        className={styles["row-menu"]}
         onBlur={(event) => {
           if (!event.currentTarget.contains(event.relatedTarget))
             event.currentTarget.open = false;
@@ -128,7 +129,7 @@ export function TaskRow({
         >
           <MoreHorizontal size={18} />
         </summary>
-        <div className="menu-popover">
+        <div className={styles["menu-popover"]}>
           <button
             onClick={(event) => {
               event.currentTarget.closest("details")?.removeAttribute("open");
@@ -139,7 +140,7 @@ export function TaskRow({
             Edit task
           </button>
           <button
-            className="danger-text"
+            className={styles["danger-text"]}
             onClick={(event) => {
               event.currentTarget.closest("details")?.removeAttribute("open");
               onDelete();
