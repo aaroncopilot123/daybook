@@ -33,6 +33,64 @@ export function dateLabel(value: string) {
   });
 }
 
+export function dayLabel(value: string) {
+  const label = dateLabel(value);
+  if (label === "Today" || label === "Tomorrow") return label;
+  return new Date(`${value}T12:00:00`).toLocaleDateString("en", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+// A weekday always means the next one, 1–7 days ahead.
+export function nextWeekday(day: number) {
+  return localDate((day - new Date().getDay() + 7) % 7 || 7);
+}
+
+const DATE_WORDS: Record<string, () => string> = {
+  today: () => localDate(),
+  tod: () => localDate(),
+  tomorrow: () => localDate(1),
+  tmr: () => localDate(1),
+  sun: () => nextWeekday(0),
+  sunday: () => nextWeekday(0),
+  mon: () => nextWeekday(1),
+  monday: () => nextWeekday(1),
+  tue: () => nextWeekday(2),
+  tues: () => nextWeekday(2),
+  tuesday: () => nextWeekday(2),
+  wed: () => nextWeekday(3),
+  wednesday: () => nextWeekday(3),
+  thu: () => nextWeekday(4),
+  thur: () => nextWeekday(4),
+  thurs: () => nextWeekday(4),
+  thursday: () => nextWeekday(4),
+  fri: () => nextWeekday(5),
+  friday: () => nextWeekday(5),
+  sat: () => nextWeekday(6),
+  saturday: () => nextWeekday(6),
+};
+const DATE_WORD_PATTERN = `(?<![\\p{L}\\p{N}])(${Object.keys(DATE_WORDS)
+  .sort((a, b) => b.length - a.length)
+  .join("|")})(?![\\p{L}\\p{N}])`;
+
+export type DateToken = { start: number; end: number; text: string; date: string };
+
+// The last whole-word date in a title, e.g. "mon" in "Call mum mon" but not in "money".
+export function findDateToken(title: string): DateToken | null {
+  let token: DateToken | null = null;
+  for (const match of title.matchAll(new RegExp(DATE_WORD_PATTERN, "giu"))) {
+    token = {
+      start: match.index,
+      end: match.index + match[0].length,
+      text: match[0],
+      date: DATE_WORDS[match[0].toLowerCase()](),
+    };
+  }
+  return token;
+}
+
 export function isDate(value: unknown): value is string {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value))
     return false;

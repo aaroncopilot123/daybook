@@ -8,7 +8,29 @@
 .composer-body {
   padding: 19px 20px 16px;
 }
+.title-field {
+  position: relative;
+}
+/* Mirrors the title text behind the transparent input so a date word can be highlighted. */
+.title-mirror {
+  position: absolute;
+  inset: 0;
+  padding: 3px 0;
+  font-size: 16px;
+  font-weight: 510;
+  white-space: pre;
+  overflow: hidden;
+  color: transparent;
+  pointer-events: none;
+}
+.date-token {
+  color: transparent;
+  background: var(--date-token-bg);
+  box-shadow: 0 0 0 2px var(--date-token-bg);
+  border-radius: 3px;
+}
 .task-title-input {
+  position: relative;
   width: 100%;
   font-size: 16px;
   font-weight: 510;

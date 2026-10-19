@@ -65,6 +65,7 @@
   --chip-selected-bg: rgba(94, 106, 210, 0.14);
   --chip-selected-border: rgba(168, 177, 255, 0.24);
   --chip-selected-text: #bdc4ff;
+  --date-token-bg: rgba(94, 106, 210, 0.3);
   --modal-shadow: #0006;
   --backdrop: rgba(0, 0, 0, 0.7);
   --project-icon-bg: #1f2028;
@@ -145,6 +146,7 @@
   --chip-selected-bg: #eceefe;
   --chip-selected-border: #7882ce;
   --chip-selected-text: #4b57c8;
+  --date-token-bg: rgba(94, 106, 210, 0.18);
   --modal-shadow: rgba(20, 24, 40, 0.16);
   --backdrop: rgba(20, 24, 40, 0.4);
   --project-icon-bg: #eceefe;
