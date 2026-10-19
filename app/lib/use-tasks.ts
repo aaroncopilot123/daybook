@@ -3,13 +3,24 @@
 import { useEffect, useRef, useState } from "react";
 import {
   loadSnapshot,
+  localDate,
+  nextDueDate,
   saveSnapshot,
   newId,
+  type Recurrence,
   type Snapshot,
   type TaskDraft,
 } from "./tasks";
 
-const emptySnapshot: Snapshot = { version: 1, tasks: [], projects: [] };
+const emptySnapshot: Snapshot = { version: 2, tasks: [], projects: [] };
+
+// What toggleTask changed, so the toast's Undo can put it back.
+export type ToggleUndo = {
+  id: string;
+  completedAt: string | null;
+  recurrence: Recurrence | null;
+  spawned?: { id: string; dueDate: string };
+};
 
 export function useTasks() {
   const [data, setData] = useState<Snapshot>(emptySnapshot);
@@ -83,30 +94,67 @@ export function useTasks() {
     }));
   }
 
-  function toggleTask(id: string) {
+  // Completing a recurring task logs this occurrence and adds the next one;
+  // restoring a past occurrence makes it a one-off so the series never doubles up.
+  function toggleTask(id: string): ToggleUndo | null {
+    const task = currentData.current.tasks.find((task) => task.id === id);
+    if (!task) return null;
     const now = new Date().toISOString();
+    const undo: ToggleUndo = {
+      id,
+      completedAt: task.completedAt,
+      recurrence: task.recurrence,
+    };
+    if (!task.completedAt && task.recurrence && task.dueDate)
+      undo.spawned = {
+        id: newId(),
+        dueDate: nextDueDate(task.recurrence, task.dueDate, localDate()),
+      };
+    const spawned = undo.spawned;
     commit((current) => ({
       ...current,
-      tasks: current.tasks.map((task) =>
-        task.id === id
-          ? {
-              ...task,
-              completedAt: task.completedAt ? null : now,
-              updatedAt: now,
-            }
-          : task,
-      ),
+      tasks: [
+        ...current.tasks.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                completedAt: item.completedAt ? null : now,
+                recurrence: item.completedAt ? null : item.recurrence,
+                updatedAt: now,
+              }
+            : item,
+        ),
+        ...(spawned
+          ? [
+              {
+                ...task,
+                id: spawned.id,
+                dueDate: spawned.dueDate,
+                completedAt: null,
+                updatedAt: now,
+              },
+            ]
+          : []),
+      ],
     }));
+    return undo;
   }
 
-  function setTaskCompletion(id: string, completedAt: string | null) {
+  function undoToggle(undo: ToggleUndo) {
     commit((current) => ({
       ...current,
-      tasks: current.tasks.map((task) =>
-        task.id === id
-          ? { ...task, completedAt, updatedAt: new Date().toISOString() }
-          : task,
-      ),
+      tasks: current.tasks
+        .filter((task) => task.id !== undo.spawned?.id)
+        .map((task) =>
+          task.id === undo.id
+            ? {
+                ...task,
+                completedAt: undo.completedAt,
+                recurrence: undo.recurrence,
+                updatedAt: new Date().toISOString(),
+              }
+            : task,
+        ),
     }));
   }
 
@@ -148,7 +196,7 @@ export function useTasks() {
     storageError,
     saveTask,
     toggleTask,
-    setTaskCompletion,
+    undoToggle,
     deleteTask,
     saveProject,
     deleteProject,

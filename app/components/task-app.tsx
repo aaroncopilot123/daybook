@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import {
   dateLabel,
+  dayInSentence,
   localDate,
   matchesView,
   type Project,
@@ -26,7 +27,7 @@ import {
   type TaskDraft,
   type View,
 } from "../lib/tasks";
-import { useTasks } from "../lib/use-tasks";
+import { useTasks, type ToggleUndo } from "../lib/use-tasks";
 import { Sidebar } from "./sidebar";
 import { ThemeToggle } from "./theme-toggle";
 import { ProjectFilters } from "./project-filters";
@@ -38,7 +39,8 @@ import styles from "./task-app.module.css";
 import sectionStyles from "./task-section.module.css";
 import sidebarStyles from "./sidebar.module.css";
 
-type Composer = { initial: TaskDraft; id?: string };
+type Composer = { initial: TaskDraft; id?: string; completed?: boolean };
+
 type Confirmation = { title: string; message: string; action: () => void };
 const blankDraft = (view: View): TaskDraft => ({
   title: "",
@@ -46,6 +48,7 @@ const blankDraft = (view: View): TaskDraft => ({
   dueDate: view === "upcoming" ? null : localDate(),
   projectId: null,
   priority: null,
+  recurrence: null,
 });
 
 export default function TaskApp() {
@@ -77,10 +80,9 @@ export default function TaskApp() {
     null,
   );
   const [notice, setNoticeText] = useState("");
-  const [undoCompletion, setUndoCompletion] = useState<{
-    id: string;
-    completedAt: string | null;
-  } | null>(null);
+  const [undoCompletion, setUndoCompletion] = useState<ToggleUndo | null>(null);
+  // The next occurrence that just replaced a completed recurring task, for its entrance motion.
+  const [rolledOverId, setRolledOverId] = useState<string | null>(null);
 
   function setNotice(message: string) {
     setNoticeText(message);
@@ -203,8 +205,10 @@ export default function TaskApp() {
         projectId: task.projectId,
         dueDate: task.dueDate,
         priority: task.priority,
+        recurrence: task.recurrence,
       },
       id: task.id,
+      completed: !!task.completedAt,
     });
   }
   function saveTask(draft: TaskDraft) {
@@ -212,16 +216,52 @@ export default function TaskApp() {
     setNotice(
       composer?.id
         ? "Task updated"
-        : view === "history"
+        : draft.recurrence
+          ? "Repeating task added"
+          : view === "history"
           ? "Task added. Find it in All."
           : "Task added",
     );
     setComposer(null);
   }
+  function toggleTask(task: Task) {
+    const row = document.activeElement?.closest("[data-task-id]");
+    const undo = store.toggleTask(task.id);
+    if (!undo) return;
+    // Keep keyboard focus in the list: the next occurrence, this row, or the row after it.
+    if (row?.getAttribute("data-task-id") === task.id) {
+      const ids = [
+        undo.spawned?.id,
+        task.id,
+        row.nextElementSibling?.getAttribute("data-task-id"),
+      ];
+      // After React commits the toggle.
+      window.requestAnimationFrame(() => {
+        const target = ids
+          .map((id) => (id ? document.querySelector(`[data-task-id="${CSS.escape(id)}"]`) : null))
+          .find(Boolean);
+        (target?.querySelector("button") ?? document.getElementById("main-content"))?.focus();
+      });
+    }
+    setRolledOverId(undo.spawned?.id ?? null);
+    setNotice(
+      task.completedAt
+        ? task.recurrence
+          ? "Restored as a one-off task"
+          : "Task restored to incomplete"
+        : undo.spawned
+          ? `Task completed. Next due ${dayInSentence(undo.spawned.dueDate)}.`
+          : "Task completed. A little progress.",
+    );
+    setUndoCompletion(undo);
+  }
   function deleteTask(task: Task) {
+    const repeating = task.recurrence && !task.completedAt;
     setConfirmation({
-      title: "Delete task?",
-      message: `“${task.title}” will be permanently deleted.`,
+      title: repeating ? "Delete repeating task?" : "Delete task?",
+      message: repeating
+        ? `“${task.title}” will be deleted and stop repeating. Past completions stay in History.`
+        : `“${task.title}” will be permanently deleted.`,
       action: () => {
         store.deleteTask(task.id);
         setNotice("Task deleted");
@@ -249,15 +289,9 @@ export default function TaskApp() {
             project={store.projects.find(
               (project) => project.id === task.projectId,
             )}
-            onToggle={() => {
-              store.toggleTask(task.id);
-              setNotice(
-                task.completedAt
-                  ? "Task restored to incomplete"
-                  : "Task completed. A little progress.",
-              );
-              setUndoCompletion({ id: task.id, completedAt: task.completedAt });
-            }}
+            rolledOver={task.id === rolledOverId}
+            onRolledOver={() => setRolledOverId(null)}
+            onToggle={() => toggleTask(task)}
             onEdit={() => editTask(task)}
             onDelete={() => deleteTask(task)}
           />
@@ -629,6 +663,7 @@ export default function TaskApp() {
             initial={composer.initial}
             projects={store.projects}
             editing={!!composer.id}
+            completed={composer.completed}
             onSave={saveTask}
             onCancel={() => setComposer(null)}
           />
@@ -724,10 +759,7 @@ export default function TaskApp() {
             <button
               className={styles["toast-undo"]}
               onClick={() => {
-                store.setTaskCompletion(
-                  undoCompletion.id,
-                  undoCompletion.completedAt,
-                );
+                store.undoToggle(undoCompletion);
                 setNotice("Completion undone");
               }}
             >

@@ -1,5 +1,6 @@
 "use client";
 
+import { useId } from "react";
 import {
   CalendarDays,
   Check,
@@ -7,30 +8,49 @@ import {
   Hash,
   MoreHorizontal,
   Pencil,
+  Repeat,
   RotateCcw,
   Trash2,
 } from "lucide-react";
-import { dateLabel, localDate, type Project, type Task } from "../lib/tasks";
+import {
+  dateLabel,
+  localDate,
+  recurrenceLabel,
+  type Project,
+  type Task,
+} from "../lib/tasks";
 import styles from "./task-row.module.css";
 
 export function TaskRow({
   task,
   project,
+  rolledOver = false,
+  onRolledOver,
   onToggle,
   onEdit,
   onDelete,
 }: {
   task: Task;
   project?: Project;
+  // The next occurrence that just replaced a completed recurring task.
+  rolledOver?: boolean;
+  onRolledOver?: () => void;
   onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const metadataId = useId();
+  const hasMetadata = !!(task.dueDate || project || task.priority || task.completedAt);
   return (
-    <li className={`${styles["task-row"]} ${task.completedAt ? styles["is-completed"] : ""}`}>
+    <li
+      data-task-id={task.id}
+      className={`${styles["task-row"]} ${task.completedAt ? styles["is-completed"] : ""} ${rolledOver ? styles["rolled-over"] : ""}`}
+      onAnimationEnd={rolledOver ? onRolledOver : undefined}
+    >
       <button
         className={styles["completion-target"]}
         aria-label={`${task.completedAt ? "Restore" : "Complete"} ${task.title}`}
+        aria-describedby={hasMetadata ? metadataId : undefined}
         aria-pressed={!!task.completedAt}
         onClick={onToggle}
       >
@@ -42,13 +62,14 @@ export function TaskRow({
         className={styles["task-content"]}
         onClick={onEdit}
         aria-label={`Edit ${task.title}`}
+        aria-describedby={hasMetadata ? metadataId : undefined}
       >
         <span className={styles["task-title"]}>{task.title}</span>
         {task.description && (
           <span className={styles["task-description"]}>{task.description}</span>
         )}
-        {(task.dueDate || project || task.priority || task.completedAt) && (
-          <span className={styles["task-metadata"]}>
+        {hasMetadata && (
+          <span id={metadataId} className={styles["task-metadata"]}>
             {task.completedAt && (
               <span className={styles["completion-date"]}>
                 Completed{" "}
@@ -76,6 +97,18 @@ export function TaskRow({
                 {!task.completedAt && task.dueDate < localDate()
                   ? " · Overdue"
                   : ""}
+              </span>
+            )}
+            {task.recurrence && (
+              <span className={styles["repeat-label"]}>
+                <Repeat size={12} aria-hidden="true" />
+                <span aria-hidden="true">
+                  {recurrenceLabel(task.recurrence, task.dueDate)}
+                </span>
+                <span className="sr-only">
+                  Repeats{" "}
+                  {recurrenceLabel(task.recurrence, task.dueDate, "sentence")}
+                </span>
               </span>
             )}
             {project && (

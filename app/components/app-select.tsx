@@ -6,7 +6,18 @@ import styles from "./app-select.module.css";
 
 type SelectOption = { value: string; label: string; className?: string };
 
-export function AppSelect({ label, value, options, onChange, icon, className = "", inheritColor = false }: {
+export function AppSelect({
+  label,
+  value,
+  options,
+  onChange,
+  icon,
+  className = "",
+  inheritColor = false,
+  triggerLabel,
+  triggerAriaLabel,
+  triggerClassName = "",
+}: {
   label: string;
   value: string;
   options: SelectOption[];
@@ -15,6 +26,11 @@ export function AppSelect({ label, value, options, onChange, icon, className = "
   className?: string;
   // Let the trigger take its colour from className, e.g. a priority tone.
   inheritColor?: boolean;
+  // A shorter label for the trigger than the selected option's menu label.
+  triggerLabel?: string;
+  triggerAriaLabel?: string;
+  // Lets the trigger borrow another component's look, e.g. a composer chip.
+  triggerClassName?: string;
 }) {
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);
@@ -139,13 +155,13 @@ export function AppSelect({ label, value, options, onChange, icon, className = "
         ref={trigger}
         type="button"
         role="combobox"
-        aria-label={label}
+        aria-label={triggerAriaLabel ?? label}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={id}
         popoverTarget={id}
         aria-activedescendant={open ? `${id}-${active}` : undefined}
-        className={styles["select-trigger"]}
+        className={`${styles["select-trigger"]} ${triggerClassName}`}
         disabled={!options.length}
         onKeyDown={handleKey}
         onClick={() => {
@@ -153,7 +169,7 @@ export function AppSelect({ label, value, options, onChange, icon, className = "
         }}
       >
         {icon}
-        <span>{options[selectedIndex]?.label ?? label}</span>
+        <span>{triggerLabel ?? options[selectedIndex]?.label ?? label}</span>
         <ChevronDown size={14} aria-hidden="true" />
       </button>
       <div

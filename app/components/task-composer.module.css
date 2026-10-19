@@ -103,6 +103,100 @@
   overflow: hidden;
   clip-path: inset(50%);
 }
+.repeat-select {
+  display: contents;
+}
+/* Compound selectors keep the chip look ahead of AppSelect's trigger styles in any load order. */
+.repeat-trigger.date-chip {
+  gap: 6px;
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 1px solid var(--control-border);
+  border-radius: 5px;
+  background: var(--chip-bg);
+  color: var(--secondary);
+  font-size: 11px;
+}
+.repeat-trigger.date-chip:hover,
+.repeat-trigger.date-chip[aria-expanded="true"] {
+  background: var(--chip-hover);
+  border-color: var(--control-border);
+}
+.repeat-trigger.date-chip.selected {
+  background: var(--chip-selected-bg);
+  border-color: var(--chip-selected-border);
+  color: var(--chip-selected-text);
+}
+.repeat-editor {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--chip-bg);
+  font-size: 12px;
+  color: var(--secondary);
+  animation: repeat-editor-in 150ms var(--ease);
+}
+@keyframes repeat-editor-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.repeat-editor-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.repeat-editor-row:last-child {
+  justify-content: space-between;
+}
+.repeat-interval {
+  width: 56px;
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--foreground);
+  font-size: 12px;
+}
+.repeat-unit {
+  max-width: 140px;
+}
+.weekday-toggles {
+  display: flex;
+  gap: 5px;
+}
+.weekday-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  background: var(--chip-bg);
+  color: var(--secondary);
+  font-size: 11px;
+  font-weight: 510;
+}
+.weekday-toggle:hover {
+  background: var(--chip-hover);
+}
+.weekday-toggle.selected {
+  background: var(--chip-selected-bg);
+  border-color: var(--chip-selected-border);
+  color: var(--chip-selected-text);
+}
+.weekday-toggle[aria-disabled="true"] {
+  cursor: default;
+}
+.repeat-start {
+  color: var(--muted);
+}
 .composer-footer {
   display: flex;
   align-items: center;
@@ -157,6 +251,22 @@
   .date-picker input {
     font-size: 13px;
     max-width: 132px;
+  }
+  .repeat-trigger.date-chip {
+    min-height: 44px;
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+  .repeat-interval {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .weekday-toggle {
+    flex: 1 1 0;
+    max-width: 44px;
+    width: auto;
+    height: auto;
+    min-height: 44px;
   }
   .composer-footer {
     flex-direction: column;

@@ -1,4 +1,10 @@
 export type Priority = 1 | 2 | 3 | 4 | null;
+// weekdays (0 = Sunday) only apply to weekly rules; without them a weekly rule follows the due date.
+export type Recurrence = {
+  interval: number;
+  unit: "day" | "week" | "month" | "year";
+  weekdays?: number[];
+};
 export type Task = {
   id: string;
   title: string;
@@ -6,6 +12,7 @@ export type Task = {
   projectId: string | null;
   dueDate: string | null;
   priority: Priority;
+  recurrence: Recurrence | null;
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -13,21 +20,55 @@ export type Task = {
 export type Project = { id: string; name: string };
 export type TaskDraft = Pick<
   Task,
-  "title" | "description" | "projectId" | "dueDate" | "priority"
+  "title" | "description" | "projectId" | "dueDate" | "priority" | "recurrence"
 >;
-export type Snapshot = { version: 1; tasks: Task[]; projects: Project[] };
+export type Snapshot = { version: 2; tasks: Task[]; projects: Project[] };
 export type View = "all" | "today" | "upcoming" | "history" | "projects";
+
+function formatDate(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function parseDate(value: string) {
+  return new Date(`${value}T12:00:00`);
+}
 
 export function localDate(offset = 0) {
   const date = new Date();
   date.setDate(date.getDate() + offset);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  return formatDate(date);
 }
+
+export function addDays(value: string, days: number) {
+  const date = parseDate(value);
+  date.setDate(date.getDate() + days);
+  return formatDate(date);
+}
+
+// Same day of the month, clamped to shorter months.
+function addMonths(value: string, months: number) {
+  const date = parseDate(value);
+  const day = date.getDate();
+  date.setDate(1);
+  date.setMonth(date.getMonth() + months);
+  date.setDate(
+    Math.min(day, new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()),
+  );
+  return formatDate(date);
+}
+
+function daysBetween(from: string, to: string) {
+  const utc = (value: string) =>
+    Date.UTC(+value.slice(0, 4), +value.slice(5, 7) - 1, +value.slice(8));
+  return Math.round((utc(to) - utc(from)) / 86_400_000);
+}
+
+const weekday = (value: string) => parseDate(value).getDay();
 
 export function dateLabel(value: string) {
   if (value === localDate()) return "Today";
   if (value === localDate(1)) return "Tomorrow";
-  return new Date(`${value}T12:00:00`).toLocaleDateString("en", {
+  return parseDate(value).toLocaleDateString("en", {
     month: "short",
     day: "numeric",
   });
@@ -36,11 +77,17 @@ export function dateLabel(value: string) {
 export function dayLabel(value: string) {
   const label = dateLabel(value);
   if (label === "Today" || label === "Tomorrow") return label;
-  return new Date(`${value}T12:00:00`).toLocaleDateString("en", {
+  return parseDate(value).toLocaleDateString("en", {
     weekday: "short",
     month: "short",
     day: "numeric",
   });
+}
+
+// dayLabel for mid-sentence use: "today", "tomorrow", "Mon, Oct 26".
+export function dayInSentence(value: string) {
+  const label = dayLabel(value);
+  return label === "Today" || label === "Tomorrow" ? label.toLowerCase() : label;
 }
 
 // A weekday always means the next one, 1–7 days ahead.
@@ -48,44 +95,247 @@ export function nextWeekday(day: number) {
   return localDate((day - new Date().getDay() + 7) % 7 || 7);
 }
 
+// The first date strictly after `after` on the schedule that starts at `anchor`.
+export function occurrenceAfter(rule: Recurrence, anchor: string, after: string) {
+  if (rule.unit === "month" || rule.unit === "year") {
+    const step = rule.interval * (rule.unit === "year" ? 12 : 1);
+    let date = anchor;
+    for (let k = 1; date <= after; k++) date = addMonths(anchor, k * step);
+    return date;
+  }
+  if (rule.unit === "day" || !rule.weekdays) {
+    const step = rule.interval * (rule.unit === "week" ? 7 : 1);
+    if (anchor > after) return anchor;
+    return addDays(anchor, (Math.floor(daysBetween(anchor, after) / step) + 1) * step);
+  }
+  const weekStart = (value: string) => addDays(value, -weekday(value));
+  const anchorWeek = weekStart(anchor);
+  let date = addDays(after, 1);
+  for (;;) {
+    const week = daysBetween(anchorWeek, weekStart(date)) / 7;
+    if (
+      rule.weekdays.includes(weekday(date)) &&
+      ((week % rule.interval) + rule.interval) % rule.interval === 0
+    )
+      return date;
+    date = addDays(date, 1);
+  }
+}
+
+// Completing early skips ahead; completing late never creates another overdue copy.
+export function nextDueDate(rule: Recurrence, dueDate: string, today: string) {
+  return occurrenceAfter(rule, dueDate, dueDate > today ? dueDate : today);
+}
+
+// Move a date forward to the rule's next weekday, if the rule names weekdays.
+export function snapToRule(rule: Recurrence | null, date: string) {
+  const days = rule?.unit === "week" ? rule.weekdays : undefined;
+  if (!days) return date;
+  return addDays(date, Math.min(...days.map((day) => (day - weekday(date) + 7) % 7)));
+}
+
+export function normalizeRecurrence(rule: Recurrence): Recurrence {
+  const interval = Math.min(99, Math.max(1, Math.round(rule.interval) || 1));
+  if (rule.unit !== "week" || !rule.weekdays?.length)
+    return { interval, unit: rule.unit };
+  const weekdays = [...new Set(rule.weekdays)].sort((a, b) => a - b);
+  if (weekdays.length === 7 && interval === 1) return { interval, unit: "day" };
+  return { interval, unit: "week", weekdays };
+}
+
+export function validRecurrence(value: unknown): value is Recurrence {
+  if (typeof value !== "object" || value === null) return false;
+  const rule = value as Record<string, unknown>;
+  const { interval, unit, weekdays } = rule;
+  if (
+    !Number.isInteger(interval) ||
+    (interval as number) < 1 ||
+    (interval as number) > 99 ||
+    !["day", "week", "month", "year"].includes(unit as string)
+  )
+    return false;
+  if (!("weekdays" in rule)) return true;
+  return (
+    unit === "week" &&
+    Array.isArray(weekdays) &&
+    weekdays.length > 0 &&
+    weekdays.every(
+      (day, i) => Number.isInteger(day) && day >= 0 && day <= 6 && (i === 0 || day > weekdays[i - 1]),
+    )
+  );
+}
+
+export function recurrenceKey(rule: Recurrence | null) {
+  return rule ? `${rule.unit}:${rule.interval}:${rule.weekdays?.join(",") ?? ""}` : "";
+}
+
+const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+export const WEEKDAY_LONG = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
+// Monday-first display order.
+export const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
+
+function listLabel(items: string[]) {
+  return items.length < 2
+    ? items.join("")
+    : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
+}
+
+function ordinal(day: number) {
+  const suffix =
+    day % 100 >= 11 && day % 100 <= 13
+      ? "th"
+      : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[day % 10] ?? "th";
+  return `${day}${suffix}`;
+}
+
+// "short" for chips and rows, "long" for menus and screen readers,
+// "sentence" for the long form mid-sentence ("every week on Monday").
+export function recurrenceLabel(
+  rule: Recurrence,
+  dueDate: string | null,
+  form: "short" | "long" | "sentence" = "short",
+): string {
+  if (form === "sentence") {
+    const label = recurrenceLabel(rule, dueDate, "long");
+    return label.charAt(0).toLowerCase() + label.slice(1);
+  }
+  const anchor = dueDate ?? localDate();
+  const every = `Every ${rule.interval > 1 ? `${rule.interval} ${rule.unit}s` : rule.unit}`;
+  if (rule.unit === "day") return every;
+  if (rule.unit === "month")
+    return form === "short" ? every : `${every} on the ${ordinal(parseDate(anchor).getDate())}`;
+  if (rule.unit === "year")
+    return form === "short"
+      ? every
+      : `${every} on ${parseDate(anchor).toLocaleDateString("en", { month: "short", day: "numeric" })}`;
+  const days = WEEK_ORDER.filter((day) =>
+    (rule.weekdays ?? [weekday(anchor)]).includes(day),
+  );
+  const key = days.join(",");
+  if (rule.interval === 1 && key === "1,2,3,4,5")
+    return form === "short" ? "Every weekday" : "Every weekday (Mon–Fri)";
+  if (rule.interval === 1 && key === "6,0")
+    return form === "short" ? "Every weekend" : "Every weekend (Sat and Sun)";
+  const names =
+    form === "short"
+      ? days.map((day) => WEEKDAY_SHORT[day]).join(", ")
+      : listLabel(days.map((day) => WEEKDAY_LONG[day]));
+  if (rule.interval > 1) return `${every} on ${names}`;
+  return form === "short" ? `Every ${names}` : `Every week on ${names}`;
+}
+
+export const PRESET_RECURRENCES: Recurrence[] = [
+  { interval: 1, unit: "day" },
+  { interval: 1, unit: "week", weekdays: [1, 2, 3, 4, 5] },
+  { interval: 1, unit: "week" },
+  { interval: 1, unit: "month" },
+  { interval: 1, unit: "year" },
+];
+
+const WEEKDAY_WORDS: Record<string, number> = {
+  sun: 0,
+  sunday: 0,
+  mon: 1,
+  monday: 1,
+  tue: 2,
+  tues: 2,
+  tuesday: 2,
+  wed: 3,
+  wednesday: 3,
+  thu: 4,
+  thur: 4,
+  thurs: 4,
+  thursday: 4,
+  fri: 5,
+  friday: 5,
+  sat: 6,
+  saturday: 6,
+};
 const DATE_WORDS: Record<string, () => string> = {
   today: () => localDate(),
   tod: () => localDate(),
   tomorrow: () => localDate(1),
   tmr: () => localDate(1),
-  sun: () => nextWeekday(0),
-  sunday: () => nextWeekday(0),
-  mon: () => nextWeekday(1),
-  monday: () => nextWeekday(1),
-  tue: () => nextWeekday(2),
-  tues: () => nextWeekday(2),
-  tuesday: () => nextWeekday(2),
-  wed: () => nextWeekday(3),
-  wednesday: () => nextWeekday(3),
-  thu: () => nextWeekday(4),
-  thur: () => nextWeekday(4),
-  thurs: () => nextWeekday(4),
-  thursday: () => nextWeekday(4),
-  fri: () => nextWeekday(5),
-  friday: () => nextWeekday(5),
-  sat: () => nextWeekday(6),
-  saturday: () => nextWeekday(6),
+  ...Object.fromEntries(
+    Object.entries(WEEKDAY_WORDS).map(([word, day]) => [word, () => nextWeekday(day)]),
+  ),
 };
-const DATE_WORD_PATTERN = `(?<![\\p{L}\\p{N}])(${Object.keys(DATE_WORDS)
-  .sort((a, b) => b.length - a.length)
-  .join("|")})(?![\\p{L}\\p{N}])`;
+const alternation = (words: string[]) =>
+  [...words].sort((a, b) => b.length - a.length).join("|");
+const DAY = `(?:${alternation(Object.keys(WEEKDAY_WORDS))})s?`;
+const SIMPLE_REPEATS: Record<string, Recurrence> = {
+  daily: { interval: 1, unit: "day" },
+  everyday: { interval: 1, unit: "day" },
+  weekly: { interval: 1, unit: "week" },
+  monthly: { interval: 1, unit: "month" },
+  yearly: { interval: 1, unit: "year" },
+  annually: { interval: 1, unit: "year" },
+};
+// Repeat phrases come first so "every mon" is one token rather than a bare "mon".
+const DATE_TOKEN_PATTERN = `(?<![\\p{L}\\p{N}])(?:${[
+  `(?<simple>${alternation(Object.keys(SIMPLE_REPEATS))})`,
+  `every\\s+(?:(?<other>other)\\s+|(?<count>\\d{1,2})\\s+)?(?<unit>day|week|month|year)s?`,
+  `every\\s+(?<span>weekday|weekend)s?`,
+  `every\\s+(?<days>${DAY}(?:\\s*(?:,\\s*(?:and\\s+)?|and\\s+|&\\s*)${DAY})*)`,
+  `(?<word>${alternation(Object.keys(DATE_WORDS))})`,
+].join("|")})(?![\\p{L}\\p{N}])`;
 
-export type DateToken = { start: number; end: number; text: string; date: string };
+function repeatFromMatch(groups: Record<string, string | undefined>): Recurrence | null {
+  if (groups.simple) return SIMPLE_REPEATS[groups.simple.toLowerCase()];
+  if (groups.unit)
+    return normalizeRecurrence({
+      interval: groups.other ? 2 : Number(groups.count ?? 1),
+      unit: groups.unit.toLowerCase() as Recurrence["unit"],
+    });
+  if (groups.span)
+    return {
+      interval: 1,
+      unit: "week",
+      weekdays: groups.span.toLowerCase() === "weekday" ? [1, 2, 3, 4, 5] : [0, 6],
+    };
+  if (groups.days)
+    return normalizeRecurrence({
+      interval: 1,
+      unit: "week",
+      weekdays: groups.days
+        .toLowerCase()
+        .split(/[^a-z]+/)
+        .filter((word) => word && word !== "and")
+        .map((word) => WEEKDAY_WORDS[word] ?? WEEKDAY_WORDS[word.slice(0, -1)]),
+    });
+  return null;
+}
 
-// The last whole-word date in a title, e.g. "mon" in "Call mum mon" but not in "money".
+export type DateToken = {
+  start: number;
+  end: number;
+  text: string;
+  date: string;
+  recurrence: Recurrence | null;
+};
+
+// The last whole-word date or repeat phrase in a title, e.g. "mon" in "Call mum mon"
+// or "every mon" in "Gym every mon", but nothing in "money".
 export function findDateToken(title: string): DateToken | null {
   let token: DateToken | null = null;
-  for (const match of title.matchAll(new RegExp(DATE_WORD_PATTERN, "giu"))) {
+  for (const match of title.matchAll(new RegExp(DATE_TOKEN_PATTERN, "giu"))) {
+    const recurrence = repeatFromMatch(match.groups ?? {});
     token = {
       start: match.index,
       end: match.index + match[0].length,
       text: match[0],
-      date: DATE_WORDS[match[0].toLowerCase()](),
+      date: recurrence
+        ? snapToRule(recurrence, localDate())
+        : DATE_WORDS[match[0].toLowerCase()](),
+      recurrence,
     };
   }
   return token;
@@ -127,7 +377,7 @@ export function seedSnapshot(): Snapshot {
     { id: "learning", name: "Learning" },
   ];
   const items: Array<
-    [string, string, string | null, number | null, Priority, boolean?]
+    [string, string, string | null, number | null, Priority, boolean?, Recurrence?]
   > = [
     [
       "Make room for a little focus",
@@ -158,7 +408,7 @@ export function seedSnapshot(): Snapshot {
       -1,
       2,
     ],
-    ["Plan the week ahead", "", "personal", 1, 3],
+    ["Plan the week ahead", "", "personal", 1, 3, false, { interval: 1, unit: "week" }],
     [
       "Explore React Server Components",
       "Understand where the client meets the server.",
@@ -178,16 +428,17 @@ export function seedSnapshot(): Snapshot {
     ["Clear a little space on your desk", "", "personal", 0, null, true],
   ];
   return {
-    version: 1,
+    version: 2,
     projects,
     tasks: items.map(
-      ([title, description, projectId, offset, priority, done], i) => ({
+      ([title, description, projectId, offset, priority, done, recurrence], i) => ({
         id: `sample-${i}`,
         title,
         description,
         projectId,
         dueDate: offset === null ? null : localDate(offset),
         priority,
+        recurrence: recurrence ?? null,
         completedAt: done ? now : null,
         createdAt: now,
         updatedAt: now,
@@ -208,11 +459,16 @@ export function loadSnapshot(): Snapshot {
     typeof value === "string" && Number.isFinite(Date.parse(value));
   if (
     !record(data) ||
-    data.version !== 1 ||
+    (data.version !== 1 && data.version !== 2) ||
     !Array.isArray(data.projects) ||
     !Array.isArray(data.tasks)
   )
     throw new Error("Invalid saved data");
+  // Version 1 predates recurring tasks.
+  const tasks: unknown[] =
+    data.version === 1
+      ? data.tasks.map((t: unknown) => (record(t) ? { ...t, recurrence: null } : t))
+      : data.tasks;
   if (
     !data.projects.every(
       (p: unknown) =>
@@ -227,7 +483,7 @@ export function loadSnapshot(): Snapshot {
   if (projectIds.size !== data.projects.length)
     throw new Error("Duplicate projects");
   if (
-    !data.tasks.every(
+    !tasks.every(
       (t: unknown) =>
         record(t) &&
         typeof t.id === "string" &&
@@ -238,15 +494,17 @@ export function loadSnapshot(): Snapshot {
           (typeof t.projectId === "string" && projectIds.has(t.projectId))) &&
         (t.dueDate === null || isDate(t.dueDate)) &&
         (t.priority === null || [1, 2, 3, 4].includes(t.priority as number)) &&
+        (t.recurrence === null ||
+          (validRecurrence(t.recurrence) && t.dueDate !== null)) &&
         (t.completedAt === null || timestamp(t.completedAt)) &&
         timestamp(t.createdAt) &&
         timestamp(t.updatedAt),
     )
   )
     throw new Error("Invalid tasks");
-  if (new Set(data.tasks.map((t: Task) => t.id)).size !== data.tasks.length)
+  if (new Set((tasks as Task[]).map((t) => t.id)).size !== tasks.length)
     throw new Error("Duplicate tasks");
-  return data as Snapshot;
+  return { ...data, version: 2, tasks } as Snapshot;
 }
 
 export function saveSnapshot(snapshot: Snapshot) {
