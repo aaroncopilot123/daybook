@@ -13,6 +13,9 @@ export type Task = {
   dueDate: string | null;
   priority: Priority;
   recurrence: Recurrence | null;
+  // One level deep: a subtask's parent is always a top-level task, and a subtask shares its
+  // parent's project and never repeats.
+  parentId: string | null;
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -20,9 +23,15 @@ export type Task = {
 export type Project = { id: string; name: string };
 export type TaskDraft = Pick<
   Task,
-  "title" | "description" | "projectId" | "dueDate" | "priority" | "recurrence"
+  | "title"
+  | "description"
+  | "projectId"
+  | "dueDate"
+  | "priority"
+  | "recurrence"
+  | "parentId"
 >;
-export type Snapshot = { version: 2; tasks: Task[]; projects: Project[] };
+export type Snapshot = { version: 3; tasks: Task[]; projects: Project[] };
 export type View = "all" | "today" | "upcoming" | "history" | "projects";
 
 function formatDate(date: Date) {
@@ -46,7 +55,7 @@ export function addDays(value: string, days: number) {
 }
 
 // Same day of the month, clamped to shorter months.
-function addMonths(value: string, months: number) {
+export function addMonths(value: string, months: number) {
   const date = parseDate(value);
   const day = date.getDate();
   date.setDate(1);
@@ -57,13 +66,13 @@ function addMonths(value: string, months: number) {
   return formatDate(date);
 }
 
-function daysBetween(from: string, to: string) {
+export function daysBetween(from: string, to: string) {
   const utc = (value: string) =>
     Date.UTC(+value.slice(0, 4), +value.slice(5, 7) - 1, +value.slice(8));
   return Math.round((utc(to) - utc(from)) / 86_400_000);
 }
 
-const weekday = (value: string) => parseDate(value).getDay();
+export const weekday = (value: string) => parseDate(value).getDay();
 
 export function dateLabel(value: string) {
   if (value === localDate()) return "Today";
@@ -88,11 +97,6 @@ export function dayLabel(value: string) {
 export function dayInSentence(value: string) {
   const label = dayLabel(value);
   return label === "Today" || label === "Tomorrow" ? label.toLowerCase() : label;
-}
-
-// A weekday always means the next one, 1–7 days ahead.
-export function nextWeekday(day: number) {
-  return localDate((day - new Date().getDay() + 7) % 7 || 7);
 }
 
 // The first date strictly after `after` on the schedule that starts at `anchor`.
@@ -240,107 +244,6 @@ export const PRESET_RECURRENCES: Recurrence[] = [
   { interval: 1, unit: "year" },
 ];
 
-const WEEKDAY_WORDS: Record<string, number> = {
-  sun: 0,
-  sunday: 0,
-  mon: 1,
-  monday: 1,
-  tue: 2,
-  tues: 2,
-  tuesday: 2,
-  wed: 3,
-  wednesday: 3,
-  thu: 4,
-  thur: 4,
-  thurs: 4,
-  thursday: 4,
-  fri: 5,
-  friday: 5,
-  sat: 6,
-  saturday: 6,
-};
-const DATE_WORDS: Record<string, () => string> = {
-  today: () => localDate(),
-  tod: () => localDate(),
-  tomorrow: () => localDate(1),
-  tmr: () => localDate(1),
-  ...Object.fromEntries(
-    Object.entries(WEEKDAY_WORDS).map(([word, day]) => [word, () => nextWeekday(day)]),
-  ),
-};
-const alternation = (words: string[]) =>
-  [...words].sort((a, b) => b.length - a.length).join("|");
-const DAY = `(?:${alternation(Object.keys(WEEKDAY_WORDS))})s?`;
-const SIMPLE_REPEATS: Record<string, Recurrence> = {
-  daily: { interval: 1, unit: "day" },
-  everyday: { interval: 1, unit: "day" },
-  weekly: { interval: 1, unit: "week" },
-  monthly: { interval: 1, unit: "month" },
-  yearly: { interval: 1, unit: "year" },
-  annually: { interval: 1, unit: "year" },
-};
-// Repeat phrases come first so "every mon" is one token rather than a bare "mon".
-const DATE_TOKEN_PATTERN = `(?<![\\p{L}\\p{N}])(?:${[
-  `(?<simple>${alternation(Object.keys(SIMPLE_REPEATS))})`,
-  `every\\s+(?:(?<other>other)\\s+|(?<count>\\d{1,2})\\s+)?(?<unit>day|week|month|year)s?`,
-  `every\\s+(?<span>weekday|weekend)s?`,
-  `every\\s+(?<days>${DAY}(?:\\s*(?:,\\s*(?:and\\s+)?|and\\s+|&\\s*)${DAY})*)`,
-  `(?<word>${alternation(Object.keys(DATE_WORDS))})`,
-].join("|")})(?![\\p{L}\\p{N}])`;
-
-function repeatFromMatch(groups: Record<string, string | undefined>): Recurrence | null {
-  if (groups.simple) return SIMPLE_REPEATS[groups.simple.toLowerCase()];
-  if (groups.unit)
-    return normalizeRecurrence({
-      interval: groups.other ? 2 : Number(groups.count ?? 1),
-      unit: groups.unit.toLowerCase() as Recurrence["unit"],
-    });
-  if (groups.span)
-    return {
-      interval: 1,
-      unit: "week",
-      weekdays: groups.span.toLowerCase() === "weekday" ? [1, 2, 3, 4, 5] : [0, 6],
-    };
-  if (groups.days)
-    return normalizeRecurrence({
-      interval: 1,
-      unit: "week",
-      weekdays: groups.days
-        .toLowerCase()
-        .split(/[^a-z]+/)
-        .filter((word) => word && word !== "and")
-        .map((word) => WEEKDAY_WORDS[word] ?? WEEKDAY_WORDS[word.slice(0, -1)]),
-    });
-  return null;
-}
-
-export type DateToken = {
-  start: number;
-  end: number;
-  text: string;
-  date: string;
-  recurrence: Recurrence | null;
-};
-
-// The last whole-word date or repeat phrase in a title, e.g. "mon" in "Call mum mon"
-// or "every mon" in "Gym every mon", but nothing in "money".
-export function findDateToken(title: string): DateToken | null {
-  let token: DateToken | null = null;
-  for (const match of title.matchAll(new RegExp(DATE_TOKEN_PATTERN, "giu"))) {
-    const recurrence = repeatFromMatch(match.groups ?? {});
-    token = {
-      start: match.index,
-      end: match.index + match[0].length,
-      text: match[0],
-      date: recurrence
-        ? snapToRule(recurrence, localDate())
-        : DATE_WORDS[match[0].toLowerCase()](),
-      recurrence,
-    };
-  }
-  return token;
-}
-
 export function isDate(value: unknown): value is string {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value))
     return false;
@@ -367,6 +270,58 @@ export function matchesView(
   if (view === "today") return !!task.dueDate && task.dueDate <= today;
   if (view === "upcoming") return !!task.dueDate && task.dueDate > today;
   return false;
+}
+
+// Subtasks in creation order.
+export function childrenOf(tasks: Task[], id: string) {
+  return tasks
+    .filter((task) => task.parentId === id)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+export function subtaskProgress(tasks: Task[], id: string) {
+  const children = tasks.filter((task) => task.parentId === id);
+  return {
+    done: children.filter((task) => task.completedAt).length,
+    total: children.length,
+  };
+}
+
+// A subtask as the composer edits it; an existing one keeps its id.
+export type SubtaskDraft = { id?: string; title: string; done: boolean };
+export const MAX_SUBTASKS = 50;
+
+export type TaskEntry = { task: Task; parent: Task | null; subtasks: Task[] };
+
+// Rows for a list. `listed` is what the view shows, already sorted. A shown top-level task
+// carries all its subtasks that share its completion state, whether or not each matches the
+// view. A listed subtask whose parent is shown is nested there; otherwise it stands alone,
+// with its parent for a breadcrumb. No task appears twice.
+export function nestTasks(
+  listed: Task[],
+  all: Task[],
+  shownParents: ReadonlySet<string>,
+): TaskEntry[] {
+  return listed.flatMap((task): TaskEntry[] => {
+    if (task.parentId === null)
+      return [
+        {
+          task,
+          parent: null,
+          subtasks: childrenOf(all, task.id).filter(
+            (child) => !child.completedAt === !task.completedAt,
+          ),
+        },
+      ];
+    if (shownParents.has(task.parentId)) return [];
+    return [
+      {
+        task,
+        parent: all.find((item) => item.id === task.parentId) ?? null,
+        subtasks: [],
+      },
+    ];
+  });
 }
 
 export function seedSnapshot(): Snapshot {
@@ -427,10 +382,24 @@ export function seedSnapshot(): Snapshot {
     ],
     ["Clear a little space on your desk", "", "personal", 0, null, true],
   ];
+  const subtasks = ["Check the calendar", "Pick three priorities"].map((title, i) => ({
+    id: `sample-child-${i}`,
+    title,
+    description: "",
+    projectId: "personal",
+    dueDate: null,
+    priority: null,
+    recurrence: null,
+    parentId: "sample-5",
+    completedAt: null,
+    createdAt: now,
+    updatedAt: now,
+  }));
   return {
-    version: 2,
+    version: 3,
     projects,
-    tasks: items.map(
+    tasks: [
+      ...items.map(
       ([title, description, projectId, offset, priority, done, recurrence], i) => ({
         id: `sample-${i}`,
         title,
@@ -439,11 +408,13 @@ export function seedSnapshot(): Snapshot {
         dueDate: offset === null ? null : localDate(offset),
         priority,
         recurrence: recurrence ?? null,
+        parentId: null,
         completedAt: done ? now : null,
         createdAt: now,
         updatedAt: now,
-      }),
-    ),
+      })),
+      ...subtasks,
+    ],
   };
 }
 
@@ -459,16 +430,22 @@ export function loadSnapshot(): Snapshot {
     typeof value === "string" && Number.isFinite(Date.parse(value));
   if (
     !record(data) ||
-    (data.version !== 1 && data.version !== 2) ||
+    ![1, 2, 3].includes(data.version as number) ||
     !Array.isArray(data.projects) ||
     !Array.isArray(data.tasks)
   )
     throw new Error("Invalid saved data");
-  // Version 1 predates recurring tasks.
-  const tasks: unknown[] =
-    data.version === 1
-      ? data.tasks.map((t: unknown) => (record(t) ? { ...t, recurrence: null } : t))
-      : data.tasks;
+  // Version 1 predates recurring tasks; version 2 predates subtasks.
+  const version = data.version as number;
+  const tasks: unknown[] = data.tasks.map((t: unknown) =>
+    !record(t)
+      ? t
+      : {
+          ...t,
+          ...(version < 2 && { recurrence: null }),
+          ...(version < 3 && { parentId: null }),
+        },
+  );
   if (
     !data.projects.every(
       (p: unknown) =>
@@ -496,15 +473,29 @@ export function loadSnapshot(): Snapshot {
         (t.priority === null || [1, 2, 3, 4].includes(t.priority as number)) &&
         (t.recurrence === null ||
           (validRecurrence(t.recurrence) && t.dueDate !== null)) &&
+        (t.parentId === null || typeof t.parentId === "string") &&
         (t.completedAt === null || timestamp(t.completedAt)) &&
         timestamp(t.createdAt) &&
         timestamp(t.updatedAt),
     )
   )
     throw new Error("Invalid tasks");
-  if (new Set((tasks as Task[]).map((t) => t.id)).size !== tasks.length)
-    throw new Error("Duplicate tasks");
-  return { ...data, version: 2, tasks } as Snapshot;
+  const byId = new Map((tasks as Task[]).map((t) => [t.id, t]));
+  if (byId.size !== tasks.length) throw new Error("Duplicate tasks");
+  if (
+    !(tasks as Task[]).every((t) => {
+      if (t.parentId === null) return true;
+      const parent = byId.get(t.parentId);
+      return (
+        !!parent &&
+        parent.parentId === null &&
+        t.recurrence === null &&
+        t.projectId === parent.projectId
+      );
+    })
+  )
+    throw new Error("Invalid subtasks");
+  return { version: 3, projects: data.projects, tasks } as Snapshot;
 }
 
 export function saveSnapshot(snapshot: Snapshot) {

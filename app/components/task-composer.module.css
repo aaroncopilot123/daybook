@@ -8,6 +8,32 @@
 .composer-body {
   padding: 19px 20px 16px;
 }
+.subtask-context {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.subtask-context > svg {
+  flex-shrink: 0;
+}
+.subtask-context strong {
+  font-weight: 510;
+  color: var(--secondary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.subtask-project {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
 .title-field {
   position: relative;
 }
@@ -23,10 +49,13 @@
   color: transparent;
   pointer-events: none;
 }
-.date-token {
+/* Vertical padding only, so glyphs stay aligned with the input; a 1px spread keeps
+   neighbouring tokens ("tmr p1") visibly separate. */
+.title-token {
   color: transparent;
   background: var(--date-token-bg);
-  box-shadow: 0 0 0 2px var(--date-token-bg);
+  padding-block: 2px;
+  box-shadow: 0 0 0 1px var(--date-token-bg);
   border-radius: 3px;
 }
 .task-title-input {
@@ -195,6 +224,52 @@
   cursor: default;
 }
 .repeat-start {
+  color: var(--muted);
+}
+.help-toggle {
+  margin-left: auto;
+}
+.typing-help {
+  gap: 10px;
+}
+.typing-help dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+.typing-help dl > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+.typing-help dt {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.typing-help dd {
+  margin: 0;
+  color: var(--muted);
+}
+.typing-help kbd {
+  margin: 0;
+  padding: 1px 6px;
+  border: 1px solid var(--control-border);
+  border-radius: 4px;
+  background: var(--input-bg);
+  color: var(--secondary);
+  font-family: inherit;
+  font-size: 11px;
+}
+.typing-help-heading {
+  margin: 0;
+  font-weight: 510;
+  color: var(--secondary);
+}
+.typing-help-note {
+  margin: 0;
   color: var(--muted);
 }
 .composer-footer {

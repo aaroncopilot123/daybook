@@ -317,6 +317,7 @@
   font-size: 12px;
   max-width: 310px;
   margin: 0 auto;
+  overflow-wrap: anywhere;
 }
 .toast {
   position: fixed;
@@ -511,4 +512,11 @@
   .content-footer {
     padding-top: 32px;
   }
+}
+.empty-actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
 }

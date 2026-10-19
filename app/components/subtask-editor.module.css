@@ -1,0 +1,165 @@
+.subtasks {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.subtasks-heading {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 510;
+  color: var(--secondary);
+}
+.subtasks-count {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.subtasks-hint {
+  margin: 2px 0 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.subtask-items {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.subtask-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 34px;
+  padding: 0 2px;
+  border-radius: 6px;
+  transition: background-color 150ms var(--ease);
+}
+.subtask-item:hover,
+.subtask-item:focus-within {
+  background: var(--control-hover);
+}
+.subtask-item.added {
+  animation: subtask-in 150ms var(--ease);
+}
+@keyframes subtask-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+}
+/* Mirrors the completion circle on task rows. */
+.subtask-check {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  color: var(--muted);
+  cursor: pointer;
+}
+.subtask-check input {
+  appearance: none;
+  margin: 0;
+  width: 15px;
+  height: 15px;
+  border: 1.3px solid currentColor;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.subtask-check input:checked {
+  background: var(--completed-bg);
+  border-color: var(--muted);
+}
+.subtask-check svg {
+  position: absolute;
+  color: var(--completed-check);
+  opacity: 0;
+  pointer-events: none;
+}
+.subtask-check input:checked + svg {
+  opacity: 1;
+}
+.subtask-title-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 0;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  color: var(--foreground);
+}
+.subtask-title-input::placeholder {
+  color: var(--muted);
+}
+.subtask-title-input:focus-visible {
+  outline: none;
+  box-shadow: inset 0 -1px 0 var(--accent-text);
+}
+.subtask-title-input.done {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+:global(.icon-button).subtask-remove {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+}
+@media (hover: hover) {
+  :global(.icon-button).subtask-remove {
+    opacity: 0;
+  }
+  .subtask-item:hover :global(.icon-button).subtask-remove,
+  .subtask-item:focus-within :global(.icon-button).subtask-remove {
+    opacity: 1;
+  }
+}
+.subtask-plus {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.subtask-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 4px 8px 4px 4px;
+  margin-left: -4px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 510;
+  color: var(--muted);
+}
+.subtask-add:hover {
+  background: var(--control-hover);
+  color: var(--foreground);
+}
+@media (max-width: 767px) {
+  .subtask-item,
+  .subtask-add {
+    min-height: 44px;
+  }
+  .subtask-check,
+  .subtask-plus {
+    width: 44px;
+    height: 44px;
+  }
+  .subtask-title-input {
+    font-size: 16px;
+  }
+  :global(.icon-button).subtask-remove {
+    width: 44px;
+    height: 44px;
+  }
+}
+@media (forced-colors: active) {
+  .subtask-check input:checked {
+    background: Highlight;
+  }
+}

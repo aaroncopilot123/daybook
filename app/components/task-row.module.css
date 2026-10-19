@@ -92,6 +92,113 @@
 .rolled-over {
   animation: roll-over 200ms cubic-bezier(0.165, 0.84, 0.44, 1);
 }
+.match {
+  background: var(--date-token-bg);
+  color: inherit;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px var(--date-token-bg);
+}
+@media (forced-colors: active) {
+  .match {
+    background: Mark;
+    color: MarkText;
+    box-shadow: none;
+  }
+}
+.task-item {
+  list-style: none;
+}
+.task-row.has-subtasks {
+  flex-wrap: wrap;
+  padding-bottom: 6px;
+}
+/* The subtask toggle sits on its own line, aligned with the title. */
+.subtask-bar {
+  flex-basis: 100%;
+  padding-left: 35px;
+  margin-top: 2px;
+}
+.subtask-toggle,
+.subtask-static {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 4px 8px 4px 4px;
+  margin-left: -4px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 510;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.subtask-static {
+  padding-left: 0;
+  margin-left: 0;
+}
+.subtask-toggle:hover {
+  background: var(--control-hover);
+  color: var(--foreground);
+}
+.subtask-toggle > svg {
+  transition: transform 150ms var(--ease);
+}
+.subtask-toggle[aria-expanded="false"] > svg {
+  transform: rotate(-90deg);
+}
+.subtask-list {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0 0 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+}
+.subtask-list[hidden] {
+  display: none;
+}
+/* Decorative guide connecting the subtasks to their parent. */
+.subtask-list::before {
+  content: "";
+  position: absolute;
+  left: -16px;
+  top: -6px;
+  bottom: 22px;
+  width: 1px;
+  background: var(--task-border);
+}
+.subtask-list .task-row {
+  padding: 10px 14px;
+  border-radius: 8px;
+}
+.subtask-list .task-title {
+  font-size: 14px;
+}
+.subtask-list .completion-circle {
+  width: 15px;
+  height: 15px;
+}
+.subtask-list .completion-target {
+  padding-top: 3px;
+}
+.parent-crumb {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 510;
+  color: var(--muted);
+}
+.parent-crumb > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.parent-crumb > svg {
+  flex-shrink: 0;
+}
 @keyframes roll-over {
   from {
     opacity: 0;
@@ -244,5 +351,40 @@
     padding: 6px;
     font-size: 11px;
     gap: 4px;
+  }
+}
+@media (max-width: 767px) {
+  .task-row.has-subtasks {
+    padding-bottom: 0;
+  }
+  .subtask-bar {
+    padding-left: 38px;
+  }
+  .subtask-toggle,
+  .subtask-static {
+    min-height: 44px;
+  }
+  .subtask-list {
+    margin-left: 20px;
+  }
+  .subtask-list::before {
+    left: -10px;
+  }
+  .subtask-list .task-row {
+    padding: 8px 10px;
+  }
+  .subtask-list .task-title {
+    font-size: 15px;
+  }
+  .subtask-list .completion-circle {
+    width: 17px;
+    height: 17px;
+  }
+  .subtask-list .restore-button {
+    width: 44px;
+    justify-content: center;
+  }
+  .subtask-list .restore-button span {
+    display: none;
   }
 }

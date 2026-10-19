@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ArrowDown,
   ArrowUpRight,
@@ -14,6 +21,7 @@ import {
   Menu,
   Pencil,
   Plus,
+  SearchX,
   Sun,
   Trash2,
 } from "lucide-react";
@@ -21,13 +29,19 @@ import {
   dateLabel,
   dayInSentence,
   localDate,
+  childrenOf,
   matchesView,
+  nestTasks,
+  subtaskProgress,
   type Project,
+  type SubtaskDraft,
   type Task,
   type TaskDraft,
   type View,
 } from "../lib/tasks";
 import { useTasks, type ToggleUndo } from "../lib/use-tasks";
+import { matchesSearch, searchTerms } from "../lib/search";
+import { TaskSearch } from "./task-search";
 import { Sidebar } from "./sidebar";
 import { ThemeToggle } from "./theme-toggle";
 import { ProjectFilters } from "./project-filters";
@@ -39,7 +53,14 @@ import styles from "./task-app.module.css";
 import sectionStyles from "./task-section.module.css";
 import sidebarStyles from "./sidebar.module.css";
 
-type Composer = { initial: TaskDraft; id?: string; completed?: boolean };
+type Composer = {
+  initial: TaskDraft;
+  id?: string;
+  completed?: boolean;
+  parentTitle?: string;
+  subtasks?: SubtaskDraft[];
+};
+const subtasks = (count: number) => `${count} ${count === 1 ? "subtask" : "subtasks"}`;
 
 type Confirmation = { title: string; message: string; action: () => void };
 const blankDraft = (view: View): TaskDraft => ({
@@ -49,6 +70,7 @@ const blankDraft = (view: View): TaskDraft => ({
   projectId: null,
   priority: null,
   recurrence: null,
+  parentId: null,
 });
 
 export default function TaskApp() {
@@ -81,8 +103,17 @@ export default function TaskApp() {
   );
   const [notice, setNoticeText] = useState("");
   const [undoCompletion, setUndoCompletion] = useState<ToggleUndo | null>(null);
-  // The next occurrence that just replaced a completed recurring task, for its entrance motion.
-  const [rolledOverId, setRolledOverId] = useState<string | null>(null);
+  // Rows that just appeared inside the list, for their entrance motion: the next occurrence of
+  // a completed recurring task, or subtasks just added to a shown parent.
+  const [enteringIds, setEnteringIds] = useState<ReadonlySet<string>>(new Set());
+  // Parents whose subtask list differs from its default: open, except in History.
+  const [toggledSubtasks, setToggledSubtasks] = useState<ReadonlySet<string>>(new Set());
+  // Session-only search within the current view; it stays across views like the project filter.
+  const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query);
+  const terms = useMemo(() => searchTerms(deferredQuery), [deferredQuery]);
+  const searching = terms.length > 0;
+  const searchInput = useRef<HTMLInputElement>(null);
 
   function setNotice(message: string) {
     setNoticeText(message);
@@ -118,8 +149,9 @@ export default function TaskApp() {
   }, [notice, undoCompletion]);
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
       if (
-        event.key.toLowerCase() !== "q" ||
+        (key !== "q" && key !== "/") ||
         event.ctrlKey ||
         event.metaKey ||
         event.altKey ||
@@ -131,6 +163,14 @@ export default function TaskApp() {
       const element = event.target as HTMLElement;
       if (element.closest("input, textarea, select, [contenteditable='true']"))
         return;
+      if (key === "/") {
+        // No search bar on the projects grid.
+        if (!searchInput.current) return;
+        event.preventDefault();
+        searchInput.current.focus();
+        searchInput.current.select();
+        return;
+      }
       event.preventDefault();
       addTask(true);
     };
@@ -153,7 +193,11 @@ export default function TaskApp() {
     projects: Layers2,
   }[view];
   const visibleTasks = store.tasks
-    .filter((task) => matchesView(task, view, today, selectedProjectId))
+    .filter(
+      (task) =>
+        matchesView(task, view, today, selectedProjectId) &&
+        (!searching || matchesSearch(task, terms)),
+    )
     .sort((a, b) =>
       view === "history"
         ? b.completedAt!.localeCompare(a.completedAt!) ||
@@ -163,10 +207,27 @@ export default function TaskApp() {
             a.createdAt.localeCompare(b.createdAt)
           : a.createdAt.localeCompare(b.createdAt),
     );
+  // Parents shown anywhere in the view carry their subtasks; see nestTasks.
+  const shownParents = new Set(
+    visibleTasks.filter((task) => task.parentId === null).map((task) => task.id),
+  );
+  const shownRows = nestTasks(visibleTasks, store.tasks, shownParents).reduce(
+    (count, entry) => count + 1 + entry.subtasks.length,
+    0,
+  );
   const overdueTasks = visibleTasks.filter(
     (task) => task.dueDate && task.dueDate < today,
   );
   const overdueCount = overdueTasks.length;
+  // The progress card ignores the search.
+  const overdueInView = searching
+    ? store.tasks.filter(
+        (task) =>
+          matchesView(task, view, today, selectedProjectId) &&
+          task.dueDate &&
+          task.dueDate < today,
+      ).length
+    : overdueCount;
   const dueTodayTasks = visibleTasks.filter((task) => task.dueDate === today);
   const todayTasks = store.tasks.filter(
     (task) =>
@@ -206,34 +267,125 @@ export default function TaskApp() {
         dueDate: task.dueDate,
         priority: task.priority,
         recurrence: task.recurrence,
+        parentId: task.parentId,
       },
       id: task.id,
       completed: !!task.completedAt,
+      parentTitle: store.tasks.find((item) => item.id === task.parentId)?.title,
+      subtasks:
+        task.parentId === null
+          ? childrenOf(store.tasks, task.id).map((child) => ({
+              id: child.id,
+              title: child.title,
+              done: !!child.completedAt,
+            }))
+          : undefined,
     });
   }
-  function saveTask(draft: TaskDraft) {
-    store.saveTask(draft, composer?.id);
-    setNotice(
-      composer?.id
-        ? "Task updated"
-        : draft.recurrence
-          ? "Repeating task added"
-          : view === "history"
-          ? "Task added. Find it in All."
-          : "Task added",
-    );
+  function addSubtask(parent: Task) {
+    setComposer({
+      initial: {
+        ...blankDraft(view),
+        dueDate: null,
+        projectId: parent.projectId,
+        parentId: parent.id,
+      },
+      parentTitle: parent.title,
+    });
+    // Show the list the new subtask lands in.
+    setToggledSubtasks((current) => {
+      const next = new Set(current);
+      next.delete(parent.id);
+      return next;
+    });
+  }
+  function changeQuery(next: string) {
+    // Starting or clearing a search resets subtask lists to their defaults, and a new
+    // search opens Today's sections so matches aren't hidden.
+    if (!!query.trim() !== !!next.trim()) {
+      setToggledSubtasks(new Set());
+      if (next.trim()) {
+        setTodayExpanded(true);
+        setOverdueExpanded(true);
+      }
+    }
+    setQuery(next);
+  }
+  function toggleSubtasks(id: string) {
+    setToggledSubtasks((current) => {
+      const next = new Set(current);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  }
+  function saveTask(draft: TaskDraft, subtaskLines?: SubtaskDraft[]) {
+    const editing = !!composer?.id;
+    const saved = store.saveTask(draft, composer?.id, subtaskLines);
+    const projectName = store.projects.find((project) => project.id === draft.projectId)?.name;
+    if (!editing && draft.parentId) setEnteringIds(new Set([saved.id]));
+    if (editing && saved.added.length) {
+      setEnteringIds(new Set(saved.added));
+      // Show the list the new subtasks land in.
+      setToggledSubtasks((current) => {
+        const next = new Set(current);
+        next.delete(saved.id);
+        return next;
+      });
+    }
+    const hidden =
+      searching && !draft.parentId && view !== "history" && !matchesSearch(draft, terms);
+    // "2 subtasks added, 1 completed, 1 deleted"
+    const changes = (
+      [
+        [saved.added.length, "added"],
+        [saved.completed, "completed"],
+        [saved.reopened, "reopened"],
+        [saved.removed, "deleted"],
+      ] as const
+    )
+      .filter(([count]) => count)
+      .map(([count, verb], index) => (index ? `${count} ${verb}` : `${subtasks(count)} ${verb}`))
+      .join(", ");
+    const sentences = draft.parentId
+      ? [editing ? "Subtask updated" : "Subtask added"]
+      : editing
+        ? [
+            "Task updated",
+            changes,
+            saved.moved &&
+              `Its ${subtasks(saved.moved)} ${projectName ? `moved to ${projectName}` : "moved too"}`,
+            hidden && "Clear search to see it",
+          ]
+        : [
+            `${draft.recurrence ? "Repeating task" : "Task"}${saved.added.length ? ` and ${subtasks(saved.added.length)}` : ""} added`,
+            view === "history"
+              ? `Find ${saved.added.length ? "them" : "it"} in All`
+              : hidden && "Clear search to see it",
+          ];
+    const parts = sentences.filter(Boolean);
+    setNotice(parts.length > 1 ? `${parts.join(". ")}.` : parts[0] || "");
     setComposer(null);
   }
   function toggleTask(task: Task) {
     const row = document.activeElement?.closest("[data-task-id]");
     const undo = store.toggleTask(task.id);
     if (!undo) return;
-    // Keep keyboard focus in the list: the next occurrence, this row, or the row after it.
+    // Keep keyboard focus in the list: the next occurrence or this row if still shown, then
+    // for a subtask its next or previous sibling or its parent, otherwise the next row
+    // outside this one.
     if (row?.getAttribute("data-task-id") === task.id) {
+      const rows = [...document.querySelectorAll("[data-task-id]")];
+      const after = rows.slice(rows.indexOf(row) + 1).find((item) => !row.contains(item));
       const ids = [
         undo.spawned?.id,
         task.id,
-        row.nextElementSibling?.getAttribute("data-task-id"),
+        ...(task.parentId
+          ? [
+              row.nextElementSibling?.getAttribute("data-task-id"),
+              row.previousElementSibling?.getAttribute("data-task-id"),
+              task.parentId,
+            ]
+          : [after?.getAttribute("data-task-id")]),
       ];
       // After React commits the toggle.
       window.requestAnimationFrame(() => {
@@ -243,28 +395,60 @@ export default function TaskApp() {
         (target?.querySelector("button") ?? document.getElementById("main-content"))?.focus();
       });
     }
-    setRolledOverId(undo.spawned?.id ?? null);
-    setNotice(
-      task.completedAt
-        ? task.recurrence
-          ? "Restored as a one-off task"
-          : "Task restored to incomplete"
-        : undo.spawned
-          ? `Task completed. Next due ${dayInSentence(undo.spawned.dueDate)}.`
-          : "Task completed. A little progress.",
-    );
+    setEnteringIds(new Set(undo.spawned ? [undo.spawned.id] : []));
+    setNotice(toggleNotice(task, undo));
     setUndoCompletion(undo);
+  }
+  function toggleNotice(task: Task, undo: ToggleUndo) {
+    const next = undo.spawned ? ` Next due ${dayInSentence(undo.spawned.dueDate)}.` : "";
+    if (task.completedAt) {
+      if (undo.reopenedParent) return "Subtask and its parent restored";
+      if (task.parentId) return "Subtask restored to incomplete";
+      if (task.recurrence)
+        return undo.cascaded
+          ? `Restored as a one-off task with ${subtasks(undo.cascaded)}`
+          : "Restored as a one-off task";
+      return undo.cascaded
+        ? `Task and ${subtasks(undo.cascaded)} restored`
+        : "Task restored to incomplete";
+    }
+    if (task.parentId) {
+      const { done, total } = subtaskProgress(store.tasks, task.parentId);
+      return done + 1 === total
+        ? `Subtask completed. All ${total} done.`
+        : `Subtask completed. ${done + 1} of ${total} done.`;
+    }
+    if (undo.cascaded) return `Task and ${subtasks(undo.cascaded)} completed.${next}`;
+    return next ? `Task completed.${next}` : "Task completed. A little progress.";
   }
   function deleteTask(task: Task) {
     const repeating = task.recurrence && !task.completedAt;
+    const children = store.tasks.filter((item) => item.parentId === task.id).length;
+    const its = children === 1 ? "its subtask" : `its ${children} subtasks`;
     setConfirmation({
-      title: repeating ? "Delete repeating task?" : "Delete task?",
-      message: repeating
-        ? `“${task.title}” will be deleted and stop repeating. Past completions stay in History.`
-        : `“${task.title}” will be permanently deleted.`,
+      title: task.parentId
+        ? "Delete subtask?"
+        : children
+          ? "Delete task and subtasks?"
+          : repeating
+            ? "Delete repeating task?"
+            : "Delete task?",
+      message: children
+        ? repeating
+          ? `“${task.title}” and ${its} will be deleted, and the task will stop repeating. Past completions stay in History.`
+          : `“${task.title}” and ${its} will be permanently deleted.`
+        : repeating
+          ? `“${task.title}” will be deleted and stop repeating. Past completions stay in History.`
+          : `“${task.title}” will be permanently deleted.`,
       action: () => {
         store.deleteTask(task.id);
-        setNotice("Task deleted");
+        setNotice(
+          task.parentId
+            ? "Subtask deleted"
+            : children
+              ? `Task and ${subtasks(children)} deleted`
+              : "Task deleted",
+        );
       },
     });
   }
@@ -279,23 +463,52 @@ export default function TaskApp() {
       },
     });
   }
+  function renderRow(task: Task, parent: Task | null, children: Task[], nested = false) {
+    // Open by default, except in History; a search also opens lists with matching subtasks.
+    const expanded =
+      (!task.completedAt || (searching && children.some((child) => matchesSearch(child, terms)))) !==
+      toggledSubtasks.has(task.id);
+    return (
+      <TaskRow
+        key={task.id}
+        task={task}
+        project={store.projects.find((project) => project.id === task.projectId)}
+        parent={parent}
+        subtask={nested}
+        terms={searching ? terms : undefined}
+        progress={task.parentId ? undefined : subtaskProgress(store.tasks, task.id)}
+        subtasks={
+          children.length
+            ? {
+                expanded,
+                onToggle: () => toggleSubtasks(task.id),
+                children: children.map((child) => renderRow(child, task, [], true)),
+              }
+            : undefined
+        }
+        rolledOver={enteringIds.has(task.id)}
+        onRolledOver={() =>
+          setEnteringIds((current) => {
+            const next = new Set(current);
+            next.delete(task.id);
+            return next;
+          })
+        }
+        onToggle={() => toggleTask(task)}
+        onEdit={() => editTask(task)}
+        onDelete={() => deleteTask(task)}
+        onAddSubtask={
+          task.parentId === null && !task.completedAt ? () => addSubtask(task) : undefined
+        }
+      />
+    );
+  }
   function renderTasks(tasks: Task[]) {
     return (
       <ul className={sectionStyles["task-list"]}>
-        {tasks.map((task) => (
-          <TaskRow
-            key={task.id}
-            task={task}
-            project={store.projects.find(
-              (project) => project.id === task.projectId,
-            )}
-            rolledOver={task.id === rolledOverId}
-            onRolledOver={() => setRolledOverId(null)}
-            onToggle={() => toggleTask(task)}
-            onEdit={() => editTask(task)}
-            onDelete={() => deleteTask(task)}
-          />
-        ))}
+        {nestTasks(tasks, store.tasks, shownParents).map((entry) =>
+          renderRow(entry.task, entry.parent, entry.subtasks),
+        )}
       </ul>
     );
   }
@@ -448,7 +661,7 @@ export default function TaskApp() {
                       {todayTasks.length === 0
                         ? "No tasks due today"
                         : `${todayCompleted} of ${todayTasks.length} completed`}
-                      {overdueCount > 0 && ` · ${overdueCount} overdue below`}
+                      {overdueInView > 0 && ` · ${overdueInView} overdue below`}
                     </span>
                   </div>
                   <div
@@ -517,20 +730,33 @@ export default function TaskApp() {
                 </div>
               ) : (
                 <>
+                  <TaskSearch
+                    ref={searchInput}
+                    value={query}
+                    onChange={changeQuery}
+                    scope={title}
+                    resultCount={searching ? visibleTasks.length : null}
+                  />
                   <ProjectFilters
                     projects={store.projects}
                     selectedProjectId={selectedProjectId}
                     onSelect={selectProject}
                   />
                   <div className={styles["list-toolbar"]}>
-                    <span>
-                      {visibleTasks.length}{" "}
-                      {visibleTasks.length === 1 ? "task" : "tasks"}
-                      <span className={styles["toolbar-dot"]}>·</span>
-                      {view === "today"
-                        ? "You’ve got this"
-                        : "One thing at a time"}
-                    </span>
+                    {searching ? (
+                      <span>
+                        {visibleTasks.length}{" "}
+                        {visibleTasks.length === 1 ? "result" : "results"} in {title}
+                      </span>
+                    ) : (
+                      <span>
+                        {shownRows} {shownRows === 1 ? "task" : "tasks"}
+                        <span className={styles["toolbar-dot"]}>·</span>
+                        {view === "today"
+                          ? "You’ve got this"
+                          : "One thing at a time"}
+                      </span>
+                    )}
                     {view === "history" ? (
                       <span>Newest completed first</span>
                     ) : (
@@ -546,17 +772,19 @@ export default function TaskApp() {
                   </div>
                   {view === "today" ? (
                     <>
-                      <TaskSection
-                        title="Today"
-                        tasks={dueTodayTasks}
-                        expanded={todayExpanded}
-                        onToggle={() => setTodayExpanded((value) => !value)}
-                        date={new Date(`${today}T12:00:00`).toLocaleDateString("en", {
-                          month: "short", day: "numeric",
-                        })}
-                      >
-                        {renderTasks(dueTodayTasks)}
-                      </TaskSection>
+                      {(!searching || dueTodayTasks.length > 0) && (
+                        <TaskSection
+                          title="Today"
+                          tasks={dueTodayTasks}
+                          expanded={todayExpanded}
+                          onToggle={() => setTodayExpanded((value) => !value)}
+                          date={new Date(`${today}T12:00:00`).toLocaleDateString("en", {
+                            month: "short", day: "numeric",
+                          })}
+                        >
+                          {renderTasks(dueTodayTasks)}
+                        </TaskSection>
+                      )}
                       {overdueCount > 0 && (
                         <TaskSection
                           title="Overdue"
@@ -600,7 +828,44 @@ export default function TaskApp() {
                   ) : (
                     renderTasks(visibleTasks)
                   )}
-                  {visibleTasks.length === 0 && view !== "today" && (
+                  {searching && visibleTasks.length === 0 && (
+                    <div className={styles["empty-state"]}>
+                      <span>
+                        <SearchX size={27} />
+                      </span>
+                      <h2>No matching tasks</h2>
+                      <p>
+                        {selectedProjectId
+                          ? `Nothing in ${title} for ${store.projects.find((project) => project.id === selectedProjectId)?.name} matches “${deferredQuery.trim()}”. Try All projects or fewer words.`
+                          : `Nothing in ${title} matches “${deferredQuery.trim()}”. Try fewer or different words.`}
+                      </p>
+                      <div className={styles["empty-actions"]}>
+                        <button
+                          type="button"
+                          className="button secondary"
+                          onClick={() => {
+                            changeQuery("");
+                            searchInput.current?.focus();
+                          }}
+                        >
+                          Clear search
+                        </button>
+                        {(view === "today" || view === "upcoming") && (
+                          <button
+                            type="button"
+                            className="button secondary"
+                            onClick={() => {
+                              navigate("all");
+                              searchInput.current?.focus();
+                            }}
+                          >
+                            Search All tasks
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {!searching && visibleTasks.length === 0 && view !== "today" && (
                     <div className={styles["empty-state"]}>
                       <span>
                         {view === "history" ? (
@@ -656,7 +921,15 @@ export default function TaskApp() {
       </Dialog>
       {composer && (
         <Dialog
-          title={composer.id ? "Edit task" : "Add task"}
+          title={
+            composer.initial.parentId
+              ? composer.id
+                ? "Edit subtask"
+                : "Add subtask"
+              : composer.id
+                ? "Edit task"
+                : "Add task"
+          }
           onClose={() => setComposer(null)}
         >
           <TaskComposer
@@ -664,6 +937,8 @@ export default function TaskApp() {
             projects={store.projects}
             editing={!!composer.id}
             completed={composer.completed}
+            parentTitle={composer.parentTitle}
+            subtasks={composer.subtasks}
             onSave={saveTask}
             onCancel={() => setComposer(null)}
           />
@@ -760,7 +1035,12 @@ export default function TaskApp() {
               className={styles["toast-undo"]}
               onClick={() => {
                 store.undoToggle(undoCompletion);
-                setNotice("Completion undone");
+                setNotice(
+                  undoCompletion.previous.find((item) => item.id === undoCompletion.id)
+                    ?.completedAt
+                    ? "Restore undone"
+                    : "Completion undone",
+                );
               }}
             >
               Undo
