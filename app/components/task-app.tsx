@@ -56,8 +56,14 @@ export default function TaskApp() {
   const desktopNavigation = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    if (!sidebarOpen) reopenNavigation.current?.focus();
+    if (!sidebarOpen) reopenNavigation.current?.focus({ preventScroll: true });
   }, [sidebarOpen]);
+  useEffect(() => {
+    const desktop = window.matchMedia("(min-width: 1024px)");
+    const closeDrawer = () => { if (desktop.matches) setDrawer(false); };
+    desktop.addEventListener("change", closeDrawer);
+    return () => desktop.removeEventListener("change", closeDrawer);
+  }, []);
   const [composer, setComposer] = useState<Composer | null>(null);
   const [projectEditor, setProjectEditor] = useState<{
     id?: string;
@@ -282,7 +288,8 @@ export default function TaskApp() {
         ref={desktopNavigation}
         id="desktop-navigation"
         className="desktop-sidebar"
-        hidden={!sidebarOpen}
+        inert={!sidebarOpen}
+        aria-hidden={!sidebarOpen}
       >
         <Sidebar {...sidebarProps} onCollapse={() => setSidebarOpen(false)} />
       </aside>
@@ -302,7 +309,7 @@ export default function TaskApp() {
                   window.requestAnimationFrame(() => {
                     desktopNavigation.current
                       ?.querySelector<HTMLButtonElement>("button")
-                      ?.focus();
+                      ?.focus({ preventScroll: true });
                   });
                 }}
               >
@@ -602,15 +609,14 @@ export default function TaskApp() {
           </button>
         )}
       </div>
-      {drawer && (
-        <Dialog
-          title="Your workspace"
-          className="navigation-dialog"
-          onClose={() => setDrawer(false)}
-        >
-          <Sidebar {...sidebarProps} onClose={() => setDrawer(false)} />
-        </Dialog>
-      )}
+      <Dialog
+        open={drawer}
+        title="Your workspace"
+        className="navigation-dialog"
+        onClose={() => setDrawer(false)}
+      >
+        <Sidebar {...sidebarProps} onClose={() => setDrawer(false)} />
+      </Dialog>
       {composer && (
         <Dialog
           title={composer.id ? "Edit task" : "Add task"}
