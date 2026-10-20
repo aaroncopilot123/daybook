@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run dev` — dev server on http://localhost:3000
 - `npm run build` — production build (also the main type check; there is no separate `tsc` script)
 - `npm run lint` — ESLint (flat config, `eslint-config-next` core-web-vitals + typescript)
-- `npm test` — Vitest unit tests (`*.test.ts` next to the module they cover; currently `app/lib/quick-add.test.ts`). Pure `app/lib` logic only, no component tests.
+- `npm test` — Vitest unit tests in `__tests__/` (one `*.test.ts` per module, e.g. `__tests__/quick-add.test.ts` for `app/lib/quick-add.ts`). Pure `app/lib` logic only, no component tests.
 
 ## Stack notes
 

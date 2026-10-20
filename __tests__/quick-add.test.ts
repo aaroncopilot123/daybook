@@ -6,8 +6,8 @@ import {
   tokenKey,
   tokenOf,
   type ParseOptions,
-} from "./quick-add";
-import type { Project, Recurrence } from "./tasks";
+} from "../app/lib/quick-add";
+import type { Project, Recurrence } from "../app/lib/tasks";
 
 // A Tuesday. Every expectation below is relative to it unless a case passes its own `today`.
 const TODAY = "2026-10-20";
