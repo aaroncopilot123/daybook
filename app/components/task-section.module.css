@@ -121,6 +121,80 @@
 .section-heading + .task-list {
   margin-top: 12px;
 }
+/* Upcoming: every day in a row, grouped by month. */
+.day-list {
+  display: flex;
+  flex-direction: column;
+}
+.month-heading {
+  margin: 34px 0 14px;
+  font-size: 13px;
+  font-weight: 510;
+  color: var(--secondary);
+}
+.month-heading:first-child {
+  margin-top: 4px;
+}
+.day-section + .day-section {
+  margin-top: 26px;
+}
+/* An empty day is just its heading, a quiet place to drop a task. */
+.empty-day + .empty-day {
+  margin-top: 6px;
+}
+.empty-day .section-heading {
+  padding-bottom: 8px;
+  font-weight: 400;
+  color: var(--muted);
+  border-bottom-color: var(--subtle-border);
+}
+/* Drop zones while a task is dragged over them. The highlight and the end-of-list line are
+   drawn outside the layout, so nothing moves under the pointer. */
+.task-section[data-sort-zone],
+.day-section {
+  position: relative;
+  border-radius: 8px;
+  transition:
+    background-color 150ms ease,
+    box-shadow 150ms ease;
+}
+.task-section[data-sort-zone][data-drop-target],
+.day-section[data-drop-target] {
+  background: var(--accent-subtle);
+  box-shadow: 0 0 0 6px var(--accent-subtle);
+}
+.task-section[data-sort-zone][data-drop-target] .section-heading,
+.day-section[data-drop-target] .section-heading {
+  color: var(--accent-text);
+}
+.task-section[data-sort-zone][data-drop-end]::after,
+.day-section[data-drop-end]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .task-section[data-sort-zone],
+  .day-section {
+    transition: none;
+  }
+}
+@media (forced-colors: active) {
+  .task-section[data-sort-zone][data-drop-target],
+  .day-section[data-drop-target] {
+    outline: 2px solid Highlight;
+    outline-offset: 4px;
+  }
+  .task-section[data-sort-zone][data-drop-end]::after,
+  .day-section[data-drop-end]::after {
+    background: Highlight;
+  }
+}
 @media (max-width: 767px) {
   .task-section + .task-section {
     margin-top: 22px;

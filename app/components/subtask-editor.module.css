@@ -28,9 +28,11 @@
   gap: 2px;
 }
 .subtask-item {
+  position: relative;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
+  gap: 0 4px;
   min-height: 34px;
   padding: 0 2px;
   border-radius: 6px;
@@ -102,19 +104,110 @@
   color: var(--muted);
   text-decoration: line-through;
 }
-:global(.icon-button).subtask-remove {
+:global(.icon-button).subtask-remove,
+:global(.icon-button).subtask-note-toggle {
   width: 28px;
   height: 28px;
   flex-shrink: 0;
 }
+:global(.icon-button).subtask-note-toggle[aria-expanded="true"] {
+  color: var(--accent-text);
+}
 @media (hover: hover) {
-  :global(.icon-button).subtask-remove {
+  :global(.icon-button).subtask-remove,
+  :global(.icon-button).subtask-note-toggle {
     opacity: 0;
   }
   .subtask-item:hover :global(.icon-button).subtask-remove,
-  .subtask-item:focus-within :global(.icon-button).subtask-remove {
+  .subtask-item:focus-within :global(.icon-button).subtask-remove,
+  .subtask-item:hover :global(.icon-button).subtask-note-toggle,
+  .subtask-item:focus-within :global(.icon-button).subtask-note-toggle,
+  :global(.icon-button).subtask-note-toggle.has-note,
+  :global(.icon-button).subtask-note-toggle[aria-expanded="true"] {
     opacity: 1;
   }
+}
+/* The description sits under the title, aligned with it. */
+.subtask-note {
+  flex-basis: calc(100% - 34px);
+  margin: -4px 0 6px 34px;
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  resize: none;
+  field-sizing: content;
+  max-height: calc(3 * 1.5em + 4px);
+  overflow-y: auto;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--secondary);
+}
+.subtask-item:focus-within .subtask-note {
+  max-height: calc(8 * 1.5em + 4px);
+}
+.subtask-note::placeholder {
+  color: var(--muted);
+}
+.subtask-note:focus-visible {
+  outline: none;
+  box-shadow: inset 0 -1px 0 var(--accent-text);
+}
+.subtask-note.done {
+  color: var(--muted);
+}
+/* Reordering: a grip in the composer's left padding, for mouse and trackpad. */
+.subtask-grip {
+  position: absolute;
+  right: 100%;
+  top: 0;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 34px;
+  color: var(--decoration);
+  cursor: grab;
+  opacity: 0;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  transition:
+    opacity 100ms var(--ease),
+    color 150ms var(--ease);
+}
+.subtask-grip:hover {
+  color: var(--secondary);
+}
+.subtask-item:hover > .subtask-grip,
+.subtask-item[data-dragging] > .subtask-grip {
+  opacity: 1;
+}
+@media (hover: none), (pointer: coarse) {
+  .subtask-grip {
+    display: none;
+  }
+}
+[data-sorting] > .subtask-item {
+  transform: translateY(var(--shift-y, 0px));
+  transition:
+    background-color 150ms var(--ease),
+    transform 150ms var(--ease-reposition);
+}
+[data-sorting] > .subtask-item[data-dragging] {
+  z-index: 1;
+  transform: translateY(var(--drag-y, 0px));
+  transition: none;
+  background: var(--drag-background);
+  box-shadow:
+    0 0 0 1px var(--selected-border),
+    var(--drag-shadow);
+  cursor: grabbing;
+}
+[data-settling] > .subtask-item[data-dragging] {
+  transition: transform 150ms var(--ease-reposition);
+}
+.subtask-item[data-dragging] > .subtask-grip {
+  color: var(--accent-text);
+  cursor: grabbing;
 }
 .subtask-plus {
   display: grid;
@@ -153,9 +246,21 @@
   .subtask-title-input {
     font-size: 16px;
   }
-  :global(.icon-button).subtask-remove {
+  :global(.icon-button).subtask-remove,
+  :global(.icon-button).subtask-note-toggle {
     width: 44px;
     height: 44px;
+  }
+  .subtask-note {
+    flex-basis: calc(100% - 48px);
+    min-height: 44px;
+    max-height: calc(3 * 1.5em + 20px);
+    margin: -6px 0 6px 48px;
+    padding: 10px 0;
+    font-size: 16px;
+  }
+  .subtask-item:focus-within .subtask-note {
+    max-height: calc(8 * 1.5em + 20px);
   }
 }
 @media (forced-colors: active) {

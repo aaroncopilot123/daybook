@@ -321,10 +321,15 @@
 }
 .toast {
   position: fixed;
-  bottom: 24px;
+  top: 24px;
   left: calc(50% + var(--sidebar-width) / 2);
-  transition: left 150ms var(--ease);
-  transform: translateX(-50%);
+  transition:
+    left 150ms var(--ease),
+    transform 150ms var(--ease),
+    opacity 150ms var(--ease);
+  transform: translateX(calc(-50% + var(--swipe-x, 0px)));
+  touch-action: pan-y;
+  user-select: none;
   display: flex;
   align-items: center;
   gap: 9px;
@@ -355,6 +360,17 @@
 .toast svg {
   color: var(--accent-text);
 }
+.toast.toast-dragging {
+  transition: none;
+}
+:global(.icon-button).toast-close {
+  width: 28px;
+  height: 28px;
+  margin: -4px -8px -4px 0;
+}
+.toast-close svg {
+  color: inherit;
+}
 .storage-error {
   font-size: 12px;
   color: var(--warning-text);
@@ -380,6 +396,45 @@
 :global(.icon-button).desktop-reopen,
 .mobile-fab {
   display: none;
+}
+/* Floats in the corner once the page has scrolled a screen down. */
+:global(.icon-button).back-to-top {
+  position: fixed;
+  right: 24px;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  z-index: 30;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--raised);
+  color: var(--secondary);
+  box-shadow: 0 6px 25px var(--popover-shadow);
+  animation: back-to-top-in 150ms var(--ease);
+  transition:
+    opacity 150ms var(--ease),
+    color 150ms var(--ease),
+    border-color 150ms var(--ease);
+}
+:global(.icon-button).back-to-top:hover {
+  color: var(--accent-text);
+  border-color: var(--selected-border);
+}
+/* Out of the way of a dragged row. */
+.app-shell.is-dragging .back-to-top {
+  opacity: 0;
+  pointer-events: none;
+}
+@keyframes back-to-top-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :global(.icon-button).back-to-top {
+    animation: none;
+  }
 }
 @media (min-width: 1024px) {
   :global(.icon-button).desktop-reopen {
@@ -407,7 +462,9 @@
   }
   .toast {
     left: 50%;
-    transition: none;
+    transition:
+      transform 150ms var(--ease),
+      opacity 150ms var(--ease);
   }
 }
 @media (max-width: 767px) {
@@ -481,6 +538,17 @@
     border-radius: 16px;
     box-shadow: 0 6px 25px var(--popover-shadow);
     z-index: 30;
+    transition: opacity 150ms var(--ease);
+  }
+  /* Stacked above the add button. */
+  :global(.icon-button).back-to-top {
+    right: 26px;
+    bottom: calc(22px + 52px + 14px + env(safe-area-inset-bottom));
+  }
+  /* Out of the way of a dragged row. */
+  .app-shell.is-dragging .mobile-fab {
+    opacity: 0;
+    pointer-events: none;
   }
   .project-form input {
     font-size: 16px;
@@ -506,8 +574,13 @@
     height: 32px;
   }
   .toast {
-    bottom: calc(88px + env(safe-area-inset-bottom));
+    top: calc(16px + env(safe-area-inset-top));
     width: max-content;
+  }
+  :global(.icon-button).toast-close {
+    width: 44px;
+    height: 44px;
+    margin: -10px -14px -10px 0;
   }
   .content-footer {
     padding-top: 32px;

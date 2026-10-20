@@ -258,9 +258,16 @@ export function TaskComposer({
           },
           showSubtasks
             ? [
-                ...lines.map((line) => ({ id: line.id, title: line.title.trim(), done: line.done })),
+                ...lines.map((line) => ({
+                  id: line.id,
+                  title: line.title.trim(),
+                  description: line.description.trim(),
+                  done: line.done,
+                })),
                 // Text typed but not yet entered still counts.
-                ...(pendingSubtask.trim() ? [{ title: pendingSubtask.trim(), done: false }] : []),
+                ...(pendingSubtask.trim()
+                  ? [{ title: pendingSubtask.trim(), description: "", done: false }]
+                  : []),
               ]
             : undefined,
         );
@@ -327,7 +334,7 @@ export function TaskComposer({
                 ? "What’s the next step?"
                 : editing
                   ? "What would you like to get done?"
-                  : "Try “Call mum tomorrow p1”"
+                  : "Try “Buy groceries tomorrow p1”"
             }
             maxLength={500}
             value={draft.title}

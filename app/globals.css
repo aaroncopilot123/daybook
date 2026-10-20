@@ -78,7 +78,12 @@
   --warning-text: #edc18b;
   --restore-hover: rgba(94, 106, 210, 0.12);
   --focus-halo: rgba(94, 106, 210, 0.15);
+  --drag-background: #2c2d33;
+  --drag-shadow: 0 4px 12px rgba(0, 0, 0, 0.2), 0 12px 32px rgba(0, 0, 0, 0.28);
   --ease: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --ease-reposition: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-enter: cubic-bezier(0.165, 0.84, 0.44, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
 }
 :root[data-theme="light"] {
   color-scheme: light;
@@ -159,6 +164,8 @@
   --warning-text: #80500f;
   --restore-hover: #eceefe;
   --focus-halo: rgba(75, 87, 200, 0.15);
+  --drag-background: #ffffff;
+  --drag-shadow: 0 4px 12px rgba(20, 24, 40, 0.08), 0 12px 32px rgba(20, 24, 40, 0.12);
 }
 @theme inline {
   --color-background: var(--background);

@@ -10,22 +10,33 @@
   box-shadow: 0 24px 80px var(--modal-shadow);
   overflow-y: auto;
 }
-.app-dialog[open] {
-  animation: dialog-enter 200ms var(--ease);
+/* Dialog.tsx drives data-state: closed → open → closing → closed. Entering is quick and
+   front-loaded; leaving is quicker still so the list is back in hand right away. */
+.app-dialog:not(.navigation-dialog) {
+  opacity: 0;
+  transform: translateY(6px) scale(0.97);
+  transition:
+    opacity 120ms var(--ease-exit),
+    transform 120ms var(--ease-exit);
 }
-@keyframes dialog-enter {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.app-dialog:not(.navigation-dialog)[data-state="open"] {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition-duration: 160ms;
+  transition-timing-function: var(--ease-enter);
+}
+.app-dialog[data-state="closing"] {
+  pointer-events: none;
 }
 .app-dialog::backdrop {
   background: var(--backdrop);
   backdrop-filter: blur(3px);
+  opacity: 0;
+  transition: opacity 120ms var(--ease-exit);
+}
+.app-dialog[data-state="open"]::backdrop {
+  opacity: 1;
+  transition: opacity 160ms var(--ease-enter);
 }
 .dialog-heading {
   display: flex;
@@ -54,23 +65,15 @@
   transform: translateX(-100%);
   transition: transform 150ms var(--ease);
 }
-.navigation-dialog[open] {
-  animation: none;
-}
 .navigation-dialog[data-state="open"] {
   transform: translateX(0);
 }
-.navigation-dialog[data-state="closing"] {
-  pointer-events: none;
-}
-.navigation-dialog::backdrop {
-  opacity: 0;
+.navigation-dialog::backdrop,
+.navigation-dialog[data-state="open"]::backdrop {
   transition: opacity 150ms var(--ease);
 }
-.navigation-dialog[data-state="open"]::backdrop {
-  opacity: 1;
-}
 @media (max-width: 767px) {
+  /* A bottom sheet slides the whole way up instead of fading in place. */
   .app-dialog:not(.navigation-dialog) {
     width: 100%;
     max-width: 100%;
@@ -78,8 +81,22 @@
     max-height: min(90dvh, calc(var(--visible-height, 100dvh) - 16px));
     border-radius: 16px 16px 0 0;
     padding-bottom: env(safe-area-inset-bottom);
+    opacity: 1;
+    transform: translateY(100%);
+    transition: transform 160ms var(--ease-exit);
+  }
+  .app-dialog:not(.navigation-dialog)[data-state="open"] {
+    transform: translateY(0);
+    transition: transform 200ms var(--ease-enter);
   }
   .dialog-heading {
     padding: 10px 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* The global reduced-motion rule doesn't reach ::backdrop. */
+  .app-dialog::backdrop,
+  .app-dialog[data-state="open"]::backdrop {
+    transition: none;
   }
 }

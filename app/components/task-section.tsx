@@ -12,6 +12,8 @@ export function TaskSection({
   onToggle,
   date,
   overdue = false,
+  zone,
+  sourceOnly = false,
   children,
 }: {
   title: string;
@@ -20,13 +22,21 @@ export function TaskSection({
   onToggle: () => void;
   date?: string;
   overdue?: boolean;
+  // Its key as a drag-and-drop zone, and whether tasks can only be dragged out of it.
+  zone?: string;
+  sourceOnly?: boolean;
   children: ReactNode;
 }) {
   const id = useId();
   const toggle = useRef<HTMLButtonElement>(null);
   const count = `${tasks.length} ${tasks.length === 1 ? "task" : "tasks"}`;
   return (
-    <section className={`${styles["task-section"]} ${styles["collapsible-section"]} ${overdue ? styles["overdue-section"] : ""}`}>
+    <section
+      className={`${styles["task-section"]} ${styles["collapsible-section"]} ${overdue ? styles["overdue-section"] : ""}`}
+      data-sort-zone={zone}
+      data-sort-label={zone ? title : undefined}
+      data-sort-source-only={sourceOnly ? "" : undefined}
+    >
       <h2 className={`${styles["section-heading"]} ${overdue ? styles["overdue-heading"] : ""}`}>
         <button
           ref={toggle}

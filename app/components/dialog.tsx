@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
 import styles from "./dialog.module.css";
 
@@ -43,16 +43,21 @@ export function Dialog({
   className = "",
   variant,
   open = true,
+  onClosed,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   className?: string;
   variant?: "navigation";
+  /** Pass `false` (instead of unmounting) to animate the dialog out. */
   open?: boolean;
+  /** Called once the exit animation has finished and the dialog is closed. */
+  onClosed?: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
-  const animated = variant === "navigation";
+  const navigation = variant === "navigation";
+  const closed = useEffectEvent(() => onClosed?.());
   useEffect(() => {
     const dialog = ref.current;
     const viewport = window.visualViewport;
@@ -84,8 +89,8 @@ export function Dialog({
       if (!dialog.open) {
         dialog.dataset.state = "closed";
         openModal(dialog);
-        if (animated && !motion.matches) {
-          // Establish the off-screen start before transitioning the new top layer.
+        if (!motion.matches) {
+          // Establish the hidden start before transitioning the new top layer.
           void window.getComputedStyle(dialog).transform;
           void window.getComputedStyle(dialog, "::backdrop").opacity;
         }
@@ -93,10 +98,14 @@ export function Dialog({
       dialog.dataset.state = "open";
       return;
     }
-    if (!dialog.open) return;
-    if (!animated || motion.matches) {
+    if (!dialog.open) {
+      closed();
+      return;
+    }
+    if (motion.matches) {
       dialog.dataset.state = "closed";
       closeModal(dialog);
+      closed();
       return;
     }
 
@@ -107,6 +116,7 @@ export function Dialog({
       cancelled = true;
       dialog.dataset.state = "closed";
       closeModal(dialog);
+      closed();
     };
     const transitionEnd = (event: TransitionEvent) => {
       if (event.target === dialog && event.propertyName === "transform" && !event.pseudoElement) finish();
@@ -115,18 +125,18 @@ export function Dialog({
     dialog.addEventListener("transitionend", transitionEnd);
     motion.addEventListener("change", motionChange);
     // Also finish if the transition is interrupted by a viewport or style change.
-    const timeout = window.setTimeout(finish, 200);
+    const timeout = window.setTimeout(finish, 250);
     return () => {
       cancelled = true;
       window.clearTimeout(timeout);
       dialog.removeEventListener("transitionend", transitionEnd);
       motion.removeEventListener("change", motionChange);
     };
-  }, [open, animated]);
+  }, [open]);
   return (
     <dialog
       ref={ref}
-      className={`${styles["app-dialog"]} ${animated ? styles["navigation-dialog"] : ""} ${className}`}
+      className={`${styles["app-dialog"]} ${navigation ? styles["navigation-dialog"] : ""} ${className}`}
       aria-label={title}
       onCancel={(event) => {
         event.preventDefault();

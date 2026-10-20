@@ -1,14 +1,29 @@
 "use client";
 
 import { useEffect, useId, useRef, type KeyboardEvent } from "react";
-import { Check, Plus, X } from "lucide-react";
+import { flushSync } from "react-dom";
+import { Check, GripVertical, Plus, TextAlignStart, X } from "lucide-react";
 import { MAX_SUBTASKS, newId, type SubtaskDraft } from "../lib/tasks";
+import { animateReorder, useDragReorder } from "../lib/use-drag-reorder";
 import styles from "./subtask-editor.module.css";
 
-// A line in the composer's subtask list; `key` is stable while editing, `id` marks a saved subtask.
-export type SubtaskLine = SubtaskDraft & { key: string };
+// A line in the composer's subtask list; `key` is stable while editing, `id` marks a saved
+// subtask, and `noteOpen` shows its description field while it's still empty.
+export type SubtaskLine = SubtaskDraft & { key: string; noteOpen?: boolean };
+
+// A field to focus: a line's title or description, the add input ("add") or its button
+// ("button"), with the selection to restore.
+type Field = { key: string; note?: boolean; selection?: [number, number] };
 
 const plural = (count: number) => `${count} ${count === 1 ? "subtask" : "subtasks"}`;
+const noteShown = (line: SubtaskLine) => line.description !== "" || !!line.noteOpen;
+
+// Grows a description with its text where `field-sizing` isn't supported.
+function grow(element: HTMLTextAreaElement | null) {
+  if (!element || CSS.supports("field-sizing", "content")) return;
+  element.style.height = "auto";
+  element.style.height = `${element.scrollHeight}px`;
+}
 
 // The composer's subtask list. Changes stay in the composer until the task is saved.
 export function SubtaskEditor({
@@ -33,35 +48,61 @@ export function SubtaskEditor({
 }) {
   const id = useId();
   const root = useRef<HTMLDivElement>(null);
+  const list = useRef<HTMLUListElement>(null);
   const addButton = useRef<HTMLButtonElement>(null);
-  const inputFor = (key: string) =>
-    root.current?.querySelector<HTMLInputElement>(`input[data-line="${CSS.escape(key)}"]`);
-  // Where focus goes once the next render lands: a line's key, the add input or its button.
-  const focusNext = useRef<string | null>(null);
+  const drag = useDragReorder();
+  const fieldFor = (field: Field) =>
+    root.current?.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      field.note
+        ? `textarea[data-note="${CSS.escape(field.key)}"]`
+        : `input[data-line="${CSS.escape(field.key)}"]`,
+    );
+  // Where focus goes once the next render lands.
+  const focusNext = useRef<Field | null>(null);
   useEffect(() => {
     const target = focusNext.current;
     if (!target) return;
     focusNext.current = null;
-    const element = target === "button" ? addButton.current : inputFor(target);
+    const element = target.key === "button" ? addButton.current : fieldFor(target);
     if (!element) return;
     element.focus();
-    if (element instanceof HTMLInputElement)
-      element.setSelectionRange(element.value.length, element.value.length);
+    if (!(element instanceof HTMLButtonElement)) {
+      const [start, end] = target.selection ?? [element.value.length, element.value.length];
+      element.setSelectionRange(start, end);
+    }
     // Keep the field above the on-screen keyboard.
     element.scrollIntoView({ block: "nearest" });
   });
 
   const full = lines.length >= MAX_SUBTASKS;
   const done = lines.filter((line) => line.done).length;
-  const order = [...lines.map((line) => line.key), ...(adding && !full ? ["add"] : [])];
+  // Every field in reading order, for the arrow keys and Enter.
+  const fields: Field[] = [
+    ...lines.flatMap((line) => [
+      { key: line.key },
+      ...(noteShown(line) ? [{ key: line.key, note: true }] : []),
+    ]),
+    ...(adding && !full ? [{ key: "add" }] : []),
+  ];
+  const nameOf = (line: SubtaskLine) =>
+    line.title || `subtask ${lines.findIndex((item) => item.key === line.key) + 1}`;
+  const updateLine = (key: string, change: Partial<SubtaskLine>) =>
+    onLinesChange(lines.map((item) => (item.key === key ? { ...item, ...change } : item)));
 
-  const addTitles = (texts: string[]) => {
+  const addTitles = (texts: string[], openNote = false) => {
     const titles = texts
       .map((text) => text.trim())
       .filter(Boolean)
       .slice(0, MAX_SUBTASKS - lines.length);
     if (!titles.length) return;
-    const next = [...lines, ...titles.map((title) => ({ key: newId(), title, done: false }))];
+    const added: SubtaskLine[] = titles.map((title) => ({
+      key: newId(),
+      title,
+      description: "",
+      done: false,
+      noteOpen: openNote,
+    }));
+    const next = [...lines, ...added];
     onLinesChange(next);
     onPendingChange("");
     announce(
@@ -69,61 +110,145 @@ export function SubtaskEditor({
         ? `Subtask added: “${titles[0]}”. ${plural(next.length)}.`
         : `${plural(titles.length)} added. ${plural(next.length)}.`,
     );
-    focusNext.current = next.length >= MAX_SUBTASKS ? next.at(-1)!.key : "add";
+    focusNext.current = openNote
+      ? { key: added.at(-1)!.key, note: true }
+      : { key: next.length >= MAX_SUBTASKS ? next.at(-1)!.key : "add" };
   };
 
   const remove = (key: string) => {
     const index = lines.findIndex((line) => line.key === key);
     const next = lines.filter((line) => line.key !== key);
     onLinesChange(next);
-    announce(`Removed “${lines[index].title || `subtask ${index + 1}`}”.`);
-    focusNext.current =
+    announce(`Removed “${nameOf(lines[index])}”.`);
+    const target =
       next[index]?.key ?? next[index - 1]?.key ?? (adding ? "add" : next.length ? null : "button");
+    focusNext.current = target ? { key: target } : null;
   };
 
   // For moves between fields that already exist, which don't re-render.
-  const focusNow = (key: string | undefined) => {
-    const element = key && inputFor(key);
+  const focusNow = (field: Field | undefined) => {
+    const element = field && fieldFor(field);
     if (!element) return;
     element.focus();
     element.setSelectionRange(element.value.length, element.value.length);
   };
 
+  const openNote = (line: SubtaskLine) => {
+    if (noteShown(line)) focusNow({ key: line.key, note: true });
+    else {
+      updateLine(line.key, { noteOpen: true });
+      focusNext.current = { key: line.key, note: true };
+    }
+  };
+
+  // A blank description closes; the title takes focus.
+  const leaveNote = (line: SubtaskLine) => {
+    if (line.description.trim()) focusNow({ key: line.key });
+    else {
+      updateLine(line.key, { description: "", noteOpen: false });
+      focusNext.current = { key: line.key };
+    }
+  };
+
+  const reorder = (keys: string[]) =>
+    keys.map((key) => lines.find((line) => line.key === key)!);
+  const announceMove = (line: SubtaskLine, index: number) =>
+    announce(`Moved “${nameOf(line)}” to position ${index + 1} of ${lines.length}.`);
+
+  // One place up or down; focus stays in the same field with the same selection.
+  const move = (line: SubtaskLine, step: -1 | 1, field: HTMLInputElement | HTMLTextAreaElement) => {
+    const index = lines.indexOf(line);
+    const target = index + step;
+    if (target < 0 || target >= lines.length) {
+      announce(`“${nameOf(line)}” is already ${step < 0 ? "first" : "last"}.`);
+      return;
+    }
+    const keys = lines.map((item) => item.key).filter((key) => key !== line.key);
+    keys.splice(target, 0, line.key);
+    focusNext.current = {
+      key: line.key,
+      note: field instanceof HTMLTextAreaElement,
+      selection: [field.selectionStart ?? 0, field.selectionEnd ?? 0],
+    };
+    animateReorder(list.current, () => flushSync(() => onLinesChange(reorder(keys))));
+    announceMove(line, target);
+  };
+
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const target = event.target;
-    if (!(target instanceof HTMLInputElement) || event.nativeEvent.isComposing) return;
-    const key = target.dataset.line;
+    const isNote = target instanceof HTMLTextAreaElement;
+    if (!(target instanceof HTMLInputElement || isNote) || event.nativeEvent.isComposing) return;
+    const key = isNote ? target.dataset.note : target.dataset.line;
+    const line = lines.find((item) => item.key === key);
+    const at = fields.findIndex((field) => field.key === key && !!field.note === isNote);
+    if (
+      line &&
+      event.altKey &&
+      event.shiftKey &&
+      (event.key === "ArrowUp" || event.key === "ArrowDown")
+    ) {
+      event.preventDefault();
+      move(line, event.key === "ArrowUp" ? -1 : 1, target);
+      return;
+    }
     if (event.key === "Enter") {
       // Never submit the task from a subtask field, except on purpose with ⌘/Ctrl+Enter.
+      if (event.metaKey || event.ctrlKey) {
+        event.preventDefault();
+        target.form?.requestSubmit();
+        return;
+      }
+      // Shift+Enter starts a new line in a description.
+      if (isNote && event.shiftKey) return;
       event.preventDefault();
-      if (event.metaKey || event.ctrlKey) target.form?.requestSubmit();
-      else if (key === "add") addTitles([pending]);
-      else if (key) focusNow(order[order.indexOf(key) + 1]);
+      // Shift+Enter opens a line's description, or adds the typed line and opens its one.
+      if (event.shiftKey) {
+        if (key === "add") addTitles([pending], true);
+        else if (line) openNote(line);
+      } else if (key === "add") addTitles([pending]);
+      else if (key) focusNow(fields.slice(at + 1).find((field) => !field.note));
       return;
     }
     if (!key) return;
     if (event.key === "Backspace" && target.value === "") {
-      event.preventDefault();
-      if (key === "add") focusNow(lines.at(-1)?.key);
-      else {
-        const index = lines.findIndex((line) => line.key === key);
-        onLinesChange(lines.filter((line) => line.key !== key));
-        focusNext.current =
-          lines[index - 1]?.key ?? lines[index + 1]?.key ?? (adding ? "add" : "button");
+      if (isNote && line) {
+        event.preventDefault();
+        leaveNote(line);
+      } else if (key === "add") {
+        event.preventDefault();
+        focusNow(fields[at - 1]);
+      } else if (line && !line.description) {
+        // A line with a description is only removed with its ✕.
+        event.preventDefault();
+        const index = lines.indexOf(line);
+        onLinesChange(lines.filter((item) => item !== line));
+        focusNext.current = {
+          key: lines[index - 1]?.key ?? lines[index + 1]?.key ?? (adding ? "add" : "button"),
+        };
       }
     } else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-      const next = order[order.indexOf(key) + (event.key === "ArrowUp" ? -1 : 1)];
+      const up = event.key === "ArrowUp";
+      // A description keeps the arrows until the caret reaches its start or end.
+      if (
+        isNote &&
+        (target.selectionStart !== target.selectionEnd ||
+          target.selectionStart !== (up ? 0 : target.value.length))
+      )
+        return;
+      const next = fields[at + (up ? -1 : 1)];
       if (!next) return;
       event.preventDefault();
       focusNow(next);
-    } else if (event.key === "Escape" && key === "add") {
-      // Clear, then close the add row; either way the dialog stays open.
+    } else if (event.key === "Escape" && (isNote || key === "add")) {
+      // Either way the dialog stays open.
       event.preventDefault();
       event.stopPropagation();
-      if (pending) onPendingChange("");
+      if (isNote && line) leaveNote(line);
+      // Clear, then close the add row.
+      else if (pending) onPendingChange("");
       else {
         onAddingChange(false);
-        focusNext.current = "button";
+        focusNext.current = { key: "button" };
       }
     }
   };
@@ -155,52 +280,102 @@ export function SubtaskEditor({
       {recurring && (
         <p className={styles["subtasks-hint"]}>Each repeat starts with these subtasks unchecked.</p>
       )}
+      <span id={`${id}-line-hint`} className="sr-only">
+        Shift+Enter adds a description. Alt+Shift+Up or Down moves it.
+      </span>
       {lines.length > 0 && (
-        <ul className={styles["subtask-items"]} aria-labelledby={`${id}-heading`}>
-          {lines.map((line, index) => (
-            <li
-              key={line.key}
-              className={`${styles["subtask-item"]} ${line.id ? "" : styles.added}`}
-            >
-              <label className={styles["subtask-check"]}>
-                <input
-                  type="checkbox"
-                  checked={line.done}
-                  aria-label={`Done: ${line.title || `subtask ${index + 1}`}`}
-                  onChange={(event) =>
-                    onLinesChange(
-                      lines.map((item) =>
-                        item.key === line.key ? { ...item, done: event.target.checked } : item,
-                      ),
-                    )
-                  }
-                />
-                <Check size={11} strokeWidth={2.5} aria-hidden="true" />
-              </label>
-              <input
-                data-line={line.key}
-                className={`${styles["subtask-title-input"]} ${line.done ? styles.done : ""}`}
-                value={line.title}
-                maxLength={500}
-                aria-label={`Subtask ${index + 1} of ${lines.length}`}
-                onChange={(event) =>
-                  onLinesChange(
-                    lines.map((item) =>
-                      item.key === line.key ? { ...item, title: event.target.value } : item,
-                    ),
+        <ul ref={list} className={styles["subtask-items"]} aria-labelledby={`${id}-heading`}>
+          {lines.map((line, index) => {
+            const name = line.title || `subtask ${index + 1}`;
+            const noteId = `${id}-note-${line.key}`;
+            return (
+              <li
+                key={line.key}
+                data-sort-id={line.key}
+                className={`${styles["subtask-item"]} ${line.id ? "" : styles.added}`}
+                onBlur={(event) => {
+                  // An empty description closes once focus moves elsewhere. Without a
+                  // target, focus was lost to a re-render, so leave it.
+                  if (
+                    event.relatedTarget &&
+                    !event.currentTarget.contains(event.relatedTarget) &&
+                    line.noteOpen &&
+                    !line.description.trim()
                   )
-                }
-              />
-              <button
-                type="button"
-                className={`icon-button ${styles["subtask-remove"]}`}
-                aria-label={`Remove subtask “${line.title || `subtask ${index + 1}`}”`}
-                onClick={() => remove(line.key)}
+                    updateLine(line.key, { description: "", noteOpen: false });
+                }}
               >
-                <X size={14} />
-              </button>
-            </li>
-          ))}
+                {lines.length > 1 && (
+                  <span
+                    className={styles["subtask-grip"]}
+                    aria-hidden="true"
+                    title="Drag to reorder"
+                    onPointerDown={(event) =>
+                      drag.start(event, (keys) => {
+                        onLinesChange(reorder(keys));
+                        announceMove(line, keys.indexOf(line.key));
+                      })
+                    }
+                  >
+                    <GripVertical size={14} />
+                  </span>
+                )}
+                <label className={styles["subtask-check"]}>
+                  <input
+                    type="checkbox"
+                    checked={line.done}
+                    aria-label={`Done: ${name}`}
+                    onChange={(event) => updateLine(line.key, { done: event.target.checked })}
+                  />
+                  <Check size={11} strokeWidth={2.5} aria-hidden="true" />
+                </label>
+                <input
+                  data-line={line.key}
+                  className={`${styles["subtask-title-input"]} ${line.done ? styles.done : ""}`}
+                  value={line.title}
+                  maxLength={500}
+                  aria-label={`Subtask ${index + 1} of ${lines.length}`}
+                  aria-describedby={`${id}-line-hint`}
+                  onChange={(event) => updateLine(line.key, { title: event.target.value })}
+                />
+                <button
+                  type="button"
+                  className={`icon-button ${styles["subtask-note-toggle"]} ${line.description ? styles["has-note"] : ""}`}
+                  aria-label={`Description for “${name}”`}
+                  aria-expanded={noteShown(line)}
+                  aria-controls={noteShown(line) ? noteId : undefined}
+                  onClick={() => openNote(line)}
+                >
+                  <TextAlignStart size={14} />
+                </button>
+                <button
+                  type="button"
+                  className={`icon-button ${styles["subtask-remove"]}`}
+                  aria-label={`Remove subtask “${name}”`}
+                  onClick={() => remove(line.key)}
+                >
+                  <X size={14} />
+                </button>
+                {noteShown(line) && (
+                  <textarea
+                    ref={grow}
+                    id={noteId}
+                    data-note={line.key}
+                    className={`${styles["subtask-note"]} ${line.done ? styles.done : ""}`}
+                    value={line.description}
+                    rows={1}
+                    placeholder="Add a description…"
+                    aria-label={`Description for “${name}”`}
+                    enterKeyHint="next"
+                    onChange={(event) => {
+                      grow(event.target);
+                      updateLine(line.key, { description: event.target.value });
+                    }}
+                  />
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
       {full ? (
@@ -229,7 +404,8 @@ export function SubtaskEditor({
             }}
           />
           <span id={`${id}-add-hint`} className="sr-only">
-            Press Enter to add it and start another. Paste a list to add several.
+            Press Enter to add it and start another, or Shift+Enter to add it with a
+            description. Paste a list to add several.
           </span>
         </div>
       ) : (
@@ -239,7 +415,7 @@ export function SubtaskEditor({
           className={styles["subtask-add"]}
           onClick={() => {
             onAddingChange(true);
-            focusNext.current = "add";
+            focusNext.current = { key: "add" };
           }}
         >
           <Plus size={14} aria-hidden="true" />

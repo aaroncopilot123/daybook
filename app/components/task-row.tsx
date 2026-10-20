@@ -1,12 +1,15 @@
 "use client";
 
-import { useId, type ReactNode } from "react";
+import { useId, type PointerEvent, type ReactNode } from "react";
 import {
+  ArrowDown,
+  ArrowUp,
   CalendarDays,
   Check,
   ChevronDown,
   ChevronRight,
   Flag,
+  GripVertical,
   Hash,
   ListPlus,
   MoreHorizontal,
@@ -26,6 +29,10 @@ import { matchRanges } from "../lib/search";
 import styles from "./task-row.module.css";
 
 const minute = (timestamp: string) => timestamp.slice(0, 16);
+
+// The move shortcut as the platform writes it. Rows only render on the client.
+const moveShortcut = (arrow: string) =>
+  /Mac|iPhone|iPad/.test(navigator.userAgent) ? `⌥⇧${arrow}` : `Alt+Shift+${arrow}`;
 
 // Text with search matches marked.
 function Highlighted({ text, terms }: { text: string; terms?: string[] }) {
@@ -60,6 +67,8 @@ export function TaskRow({
   onEdit,
   onDelete,
   onAddSubtask,
+  reorder,
+  onMove,
 }: {
   task: Task;
   project?: Project;
@@ -79,6 +88,17 @@ export function TaskRow({
   onEdit: () => void;
   onDelete: () => void;
   onAddSubtask?: () => void;
+  // Set where this row can be reordered: the grip's drag, and which ways it can move. A move
+  // past the end of its list into another day's list is labelled with that day.
+  reorder?: {
+    onGripDown: (event: PointerEvent<HTMLElement>) => void;
+    canMoveUp: boolean;
+    canMoveDown: boolean;
+    moveUpLabel?: string;
+    moveDownLabel?: string;
+  };
+  // Move one place up (-1) or down (1), from the keyboard shortcut or the menu.
+  onMove: (step: -1 | 1, from: "key" | "menu") => void;
 }) {
   const metadataId = useId();
   const subtasksId = useId();
@@ -100,12 +120,37 @@ export function TaskRow({
   return (
     <li
       data-task-id={task.id}
+      data-sort-id={reorder ? task.id : undefined}
       className={`${styles["task-item"]} ${rolledOver ? styles["rolled-over"] : ""}`}
       onAnimationEnd={rolledOver ? onRolledOver : undefined}
+      onKeyDown={(event) => {
+        if (
+          !event.altKey ||
+          !event.shiftKey ||
+          event.metaKey ||
+          event.ctrlKey ||
+          (event.key !== "ArrowUp" && event.key !== "ArrowDown") ||
+          // A subtask's row handles its own moves.
+          (event.target as HTMLElement).closest("[data-task-id]") !== event.currentTarget
+        )
+          return;
+        event.preventDefault();
+        onMove(event.key === "ArrowUp" ? -1 : 1, "key");
+      }}
     >
       <div
         className={`${styles["task-row"]} ${task.completed_at ? styles["is-completed"] : ""} ${subtaskCount ? styles["has-subtasks"] : ""}`}
       >
+        {reorder && (
+          <span
+            className={styles["drag-handle"]}
+            aria-hidden="true"
+            title="Drag to reorder"
+            onPointerDown={reorder.onGripDown}
+          >
+            <GripVertical size={16} />
+          </span>
+        )}
         <button
           className={styles["completion-target"]}
           aria-label={`${task.completed_at ? "Restore" : "Complete"} ${task.title}`}
@@ -255,6 +300,27 @@ export function TaskRow({
                 Add subtask
               </button>
             )}
+            {reorder &&
+              ([
+                [-1, reorder.moveUpLabel ?? "Move up", ArrowUp, "↑", "ArrowUp", reorder.canMoveUp],
+                [1, reorder.moveDownLabel ?? "Move down", ArrowDown, "↓", "ArrowDown", reorder.canMoveDown],
+              ] as const).map(([step, label, Icon, arrow, key, enabled]) => (
+                <button
+                  key={label}
+                  disabled={!enabled}
+                  aria-keyshortcuts={`Alt+Shift+${key}`}
+                  onClick={(event) => {
+                    event.currentTarget.closest("details")?.removeAttribute("open");
+                    onMove(step, "menu");
+                  }}
+                >
+                  <Icon size={14} />
+                  {label}
+                  <kbd className={styles["menu-shortcut"]} aria-hidden="true">
+                    {moveShortcut(arrow)}
+                  </kbd>
+                </button>
+              ))}
             <button
               className={styles["danger-text"]}
               onClick={(event) => {

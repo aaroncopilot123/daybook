@@ -16,6 +16,9 @@ export type Task = {
   // One level deep: a subtask's parent is always a top-level task, and a subtask shares its
   // parent's project and never repeats.
   parent_id: string | null;
+  // Manual order: top-level tasks share one order, and each parent orders its own subtasks.
+  // Every view shows its tasks in this order.
+  sequence: number;
   completed_at: string | null;
   created_at: string;
   updated_at: string;
@@ -31,7 +34,7 @@ export type TaskDraft = Pick<
   | "recurrence"
   | "parent_id"
 >;
-export type Snapshot = { version: 4; tasks: Task[]; projects: Project[] };
+export type Snapshot = { version: 5; tasks: Task[]; projects: Project[] };
 export type View = "all" | "today" | "upcoming" | "history" | "projects";
 
 function formatDate(date: Date) {
@@ -73,6 +76,15 @@ export function daysBetween(from: string, to: string) {
 }
 
 export const weekday = (value: string) => parseDate(value).getDay();
+
+// Upcoming's days: every day from tomorrow through `end`, then any later day in `dates`, so a
+// task due beyond the loaded range is never hidden.
+export function upcomingDays(today: string, end: string, dates: Iterable<string>) {
+  const days: string[] = [];
+  for (let day = addDays(today, 1); day <= end; day = addDays(day, 1)) days.push(day);
+  const later = [...new Set(dates)].filter((date) => date > end).sort();
+  return [...days, ...later];
+}
 
 export function dateLabel(value: string) {
   if (value === localDate()) return "Today";
@@ -272,11 +284,45 @@ export function matchesView(
   return false;
 }
 
-// Subtasks in creation order.
+export const bySequence = (a: Task, b: Task) =>
+  a.sequence - b.sequence || a.created_at.localeCompare(b.created_at);
+
+// The manual order for a mixed list. A subtask shown without its parent sorts right after
+// the place its parent would have.
+export function manualOrder(tasks: Task[]) {
+  const sequences = new Map(tasks.map((task) => [task.id, task.sequence]));
+  const key = (task: Task) =>
+    task.parent_id === null
+      ? [task.sequence, -Infinity]
+      : [sequences.get(task.parent_id) ?? task.sequence, task.sequence];
+  return (a: Task, b: Task) => {
+    const [a1, a2] = key(a);
+    const [b1, b2] = key(b);
+    return a1 - b1 || a2 - b2 || a.created_at.localeCompare(b.created_at);
+  };
+}
+
+// The tasks ordered alongside this one: top-level tasks, or the subtasks of its parent.
+export const scopeOf = (tasks: Task[], task: Pick<Task, "parent_id">) =>
+  tasks.filter((item) => item.parent_id === task.parent_id).sort(bySequence);
+
+// The next sequence at the end of a scope.
+export const nextSequence = (scope: Task[]) =>
+  scope.reduce((max, task) => Math.max(max, task.sequence), 0) + 1;
+
+// A sequence for a task inserted at `index` of `rest` (its scope without it, in order), or
+// null when the neighbours are too close and the scope needs renumbering.
+export function sequenceAt(rest: Task[], index: number) {
+  const before = rest[index - 1]?.sequence;
+  const after = rest[index]?.sequence;
+  if (before === undefined) return after === undefined ? 1 : after - 1;
+  if (after === undefined) return before + 1;
+  return after - before > 1e-6 ? (before + after) / 2 : null;
+}
+
+// Subtasks in their manual order.
 export function childrenOf(tasks: Task[], id: string) {
-  return tasks
-    .filter((task) => task.parent_id === id)
-    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+  return tasks.filter((task) => task.parent_id === id).sort(bySequence);
 }
 
 export function subtaskProgress(tasks: Task[], id: string) {
@@ -288,7 +334,7 @@ export function subtaskProgress(tasks: Task[], id: string) {
 }
 
 // A subtask as the composer edits it; an existing one keeps its id.
-export type SubtaskDraft = { id?: string; title: string; done: boolean };
+export type SubtaskDraft = { id?: string; title: string; description: string; done: boolean };
 export const MAX_SUBTASKS = 50;
 
 export type TaskEntry = { task: Task; parent: Task | null; subtasks: Task[] };
@@ -391,12 +437,13 @@ export function seedSnapshot(): Snapshot {
     priority: null,
     recurrence: null,
     parent_id: "sample-5",
+    sequence: i + 1,
     completed_at: null,
     created_at: now,
     updated_at: now,
   }));
   return {
-    version: 4,
+    version: 5,
     projects,
     tasks: [
       ...items.map(
@@ -409,6 +456,7 @@ export function seedSnapshot(): Snapshot {
         priority,
         recurrence: recurrence ?? null,
         parent_id: null,
+        sequence: i + 1,
         completed_at: done ? now : null,
         created_at: now,
         updated_at: now,
@@ -446,12 +494,13 @@ export function loadSnapshot(): Snapshot {
     typeof value === "string" && Number.isFinite(Date.parse(value));
   if (
     !record(data) ||
-    ![1, 2, 3, 4].includes(data.version as number) ||
+    ![1, 2, 3, 4, 5].includes(data.version as number) ||
     !Array.isArray(data.projects) ||
     !Array.isArray(data.tasks)
   )
     throw new Error("Invalid saved data");
-  // Version 1 predates recurring tasks; version 2 predates subtasks; version 3 used camelCase keys.
+  // Version 1 predates recurring tasks; version 2 predates subtasks; version 3 used camelCase
+  // keys; version 4 predates the manual order.
   const version = data.version as number;
   const tasks: unknown[] = data.tasks.map((t: unknown) =>
     !record(t)
@@ -462,6 +511,18 @@ export function loadSnapshot(): Snapshot {
           ...(version < 3 && { parent_id: null }),
         },
   );
+  if (version < 5) {
+    // Lists keep the creation order they had.
+    const scopes = new Map<unknown, Record<string, unknown>[]>();
+    for (const t of tasks)
+      if (record(t)) scopes.set(t.parent_id, [...(scopes.get(t.parent_id) ?? []), t]);
+    for (const scope of scopes.values())
+      scope
+        .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))
+        .forEach((t, i) => {
+          t.sequence = i + 1;
+        });
+  }
   if (
     !data.projects.every(
       (p: unknown) =>
@@ -490,6 +551,7 @@ export function loadSnapshot(): Snapshot {
         (t.recurrence === null ||
           (validRecurrence(t.recurrence) && t.due_date !== null)) &&
         (t.parent_id === null || typeof t.parent_id === "string") &&
+        Number.isFinite(t.sequence) &&
         (t.completed_at === null || timestamp(t.completed_at)) &&
         timestamp(t.created_at) &&
         timestamp(t.updated_at),
@@ -511,7 +573,7 @@ export function loadSnapshot(): Snapshot {
     })
   )
     throw new Error("Invalid subtasks");
-  return { version: 4, projects: data.projects, tasks } as Snapshot;
+  return { version: 5, projects: data.projects, tasks } as Snapshot;
 }
 
 export function saveSnapshot(snapshot: Snapshot) {

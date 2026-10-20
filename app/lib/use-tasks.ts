@@ -7,7 +7,10 @@ import {
   loadSnapshot,
   localDate,
   nextDueDate,
+  nextSequence,
   saveSnapshot,
+  scopeOf,
+  sequenceAt,
   newId,
   type Snapshot,
   type SubtaskDraft,
@@ -15,7 +18,7 @@ import {
   type TaskDraft,
 } from "./tasks";
 
-const emptySnapshot: Snapshot = { version: 4, tasks: [], projects: [] };
+const emptySnapshot: Snapshot = { version: 5, tasks: [], projects: [] };
 
 // What toggleTask changed, so the toast's Undo can put it all back.
 export type ToggleUndo = {
@@ -28,6 +31,16 @@ export type ToggleUndo = {
   cascaded: number;
   // Restoring a subtask reopened its completed parent.
   reopenedParent: boolean;
+};
+
+// What rescheduleTask changed, so the toast's Undo can put it back.
+export type ScheduleUndo = {
+  id: string;
+  dueDate: string;
+  // The task's new position among the shown tasks of the list it landed in.
+  position: { position: number; total: number };
+  // Every task the move changed, as it was before.
+  previous: Array<Pick<Task, "id" | "due_date" | "sequence">>;
 };
 
 export function useTasks() {
@@ -82,8 +95,8 @@ export function useTasks() {
   }
 
   // Saves a task and, when `subtasks` is given, makes its subtasks match that final list:
-  // missing ones are deleted, kept ones renamed or ticked, new ones added in the typed order.
-  // Returns what changed, for the toast.
+  // missing ones are deleted, kept ones edited, new ones added, all in the list's order.
+  // A new task goes at the end of its list. Returns what changed, for the toast.
   function saveTask(draft: TaskDraft, id?: string, subtasks?: SubtaskDraft[]) {
     const now = new Date().toISOString();
     const tasks = currentData.current.tasks;
@@ -108,6 +121,12 @@ export function useTasks() {
     const changes = new Map<string, Partial<Task>>();
     let completed = 0;
     let reopened = 0;
+    // Subtasks take their place in the list; lines without a title are skipped.
+    const sequences = new Map(
+      (wanted ?? [])
+        .filter((line) => line.id || line.title.trim())
+        .map((line, i) => [line, i + 1]),
+    );
     for (const line of wanted ?? []) {
       const child = existing.find((item) => item.id === line.id);
       if (!child) continue;
@@ -115,6 +134,10 @@ export function useTasks() {
       // An emptied title keeps the old one.
       const title = line.title.trim();
       if (title && title !== child.title) change.title = title;
+      const description = line.description.trim();
+      if (description !== child.description) change.description = description;
+      const sequence = sequences.get(line)!;
+      if (sequence !== child.sequence) change.sequence = sequence;
       if (line.done && !child.completed_at) {
         change.completed_at = now;
         completed++;
@@ -135,12 +158,13 @@ export function useTasks() {
       .map((line, i) => ({
         id: newId(),
         title: line.title.trim(),
-        description: "",
+        description: line.description.trim(),
         project_id: fixed.project_id,
         due_date: null,
         priority: null,
         recurrence: null,
         parent_id: taskId,
+        sequence: sequences.get(line)!,
         completed_at: line.done ? now : null,
         // A millisecond apart, so they keep the order they were typed in.
         created_at: new Date(Date.parse(now) + i + 1).toISOString(),
@@ -158,7 +182,16 @@ export function useTasks() {
           }),
         ...(id
           ? []
-          : [{ ...fixed, id: taskId, completed_at: null, created_at: now, updated_at: now }]),
+          : [
+              {
+                ...fixed,
+                id: taskId,
+                sequence: nextSequence(scopeOf(current.tasks, fixed)),
+                completed_at: null,
+                created_at: now,
+                updated_at: now,
+              },
+            ]),
         ...added,
       ],
     }));
@@ -217,14 +250,21 @@ export function useTasks() {
     if (!task.completed_at && task.recurrence && task.due_date) {
       const dueDate = nextDueDate(task.recurrence, task.due_date, localDate());
       const shift = daysBetween(task.due_date, dueDate);
-      const next = { ...task, id: newId(), dueDate, completedAt: null, updatedAt: now };
+      // The next occurrence and its subtasks keep their places in the order.
+      const next: Task = {
+        ...task,
+        id: newId(),
+        due_date: dueDate,
+        completed_at: null,
+        updated_at: now,
+      };
       const copies = children.map((child) => ({
         ...child,
         id: newId(),
-        parentId: next.id,
-        dueDate: child.due_date && addDays(child.due_date, shift),
-        completedAt: null,
-        updatedAt: now,
+        parent_id: next.id,
+        due_date: child.due_date && addDays(child.due_date, shift),
+        completed_at: null,
+        updated_at: now,
       }));
       undo.spawned = { id: next.id, dueDate, childIds: copies.map((copy) => copy.id) };
       spawnedTasks = [next, ...copies];
@@ -254,6 +294,94 @@ export function useTasks() {
           const before = previous.get(task.id);
           return before ? { ...task, ...before, updated_at: now } : task;
         }),
+    }));
+  }
+
+  // Where a task lands in a list. `order` is that list's ids with the task in its new place,
+  // whether it moved within the list or came from another one. Only tasks in the same scope
+  // count: the task lands right after the shown task above it (moving down) or right before
+  // the shown task below it (moving up), and tasks the list doesn't show keep their places.
+  // Returns its position among the shown tasks and the sequences that change.
+  function place(task: Task, order: string[]) {
+    const scope = scopeOf(currentData.current.tasks, task);
+    const shownIds = new Set(order);
+    const before = scope.filter((item) => shownIds.has(item.id)).map((item) => item.id);
+    const after = order.filter((item) => before.includes(item));
+    const from = before.indexOf(task.id);
+    const to = after.indexOf(task.id);
+    const position = { position: to + 1, total: after.length };
+    if (from < 0 || from === to) return { position, sequences: new Map<string, number>() };
+    const rest = scope.filter((item) => item.id !== task.id);
+    const anchor = to > from ? after[to - 1] : after[to + 1];
+    const index = rest.findIndex((item) => item.id === anchor) + (to > from ? 1 : 0);
+    const sequence = sequenceAt(rest, index);
+    // Too close to fit between: number the whole scope again.
+    const sequences = new Map(
+      sequence === null
+        ? [...rest.slice(0, index), task, ...rest.slice(index)].map((item, i) => [item.id, i + 1])
+        : [[task.id, sequence]],
+    );
+    return { position, sequences };
+  }
+
+  // Moves a task within the list it's shown in. `order` is that list's ids after the move.
+  // Returns its new position among the shown tasks.
+  function moveTask(id: string, order: string[]) {
+    const task = currentData.current.tasks.find((item) => item.id === id);
+    if (!task) return null;
+    const { position, sequences } = place(task, order);
+    const now = new Date().toISOString();
+    commit((current) => ({
+      ...current,
+      tasks: current.tasks.map((item) => {
+        const next = sequences.get(item.id);
+        return next === undefined || next === item.sequence
+          ? item
+          : { ...item, sequence: next, updated_at: now };
+      }),
+    }));
+    return position;
+  }
+
+  // Moves a task into another day's list: it becomes due that day and lands in `order`, that
+  // list's ids with the task in its new place. Only the task's own date changes; a recurring
+  // task's series continues from the new date, and its subtasks keep their dates.
+  function rescheduleTask(id: string, dueDate: string, order: string[]): ScheduleUndo | null {
+    const tasks = currentData.current.tasks;
+    const task = tasks.find((item) => item.id === id);
+    if (!task || task.due_date === dueDate) return null;
+    const { position, sequences } = place(task, order);
+    const changed = new Set([id, ...sequences.keys()]);
+    const undo: ScheduleUndo = {
+      id,
+      dueDate,
+      position,
+      previous: tasks
+        .filter((item) => changed.has(item.id))
+        .map(({ id, due_date, sequence }) => ({ id, due_date, sequence })),
+    };
+    const now = new Date().toISOString();
+    commit((current) => ({
+      ...current,
+      tasks: current.tasks.map((item) => {
+        if (!changed.has(item.id)) return item;
+        const sequence = sequences.get(item.id) ?? item.sequence;
+        if (item.id === id) return { ...item, due_date: dueDate, sequence, updated_at: now };
+        return sequence === item.sequence ? item : { ...item, sequence, updated_at: now };
+      }),
+    }));
+    return undo;
+  }
+
+  function undoReschedule(undo: ScheduleUndo) {
+    const previous = new Map(undo.previous.map((item) => [item.id, item]));
+    const now = new Date().toISOString();
+    commit((current) => ({
+      ...current,
+      tasks: current.tasks.map((task) => {
+        const before = previous.get(task.id);
+        return before ? { ...task, ...before, updated_at: now } : task;
+      }),
     }));
   }
 
@@ -297,6 +425,9 @@ export function useTasks() {
     saveTask,
     toggleTask,
     undoToggle,
+    moveTask,
+    rescheduleTask,
+    undoReschedule,
     deleteTask,
     saveProject,
     deleteProject,
