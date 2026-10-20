@@ -35,7 +35,7 @@ export type TaskDraft = Pick<
   | "parent_id"
 >;
 export type Snapshot = { version: 5; tasks: Task[]; projects: Project[] };
-export type View = "all" | "today" | "upcoming" | "history" | "projects";
+export type View = "all" | "today" | "history" | "projects";
 
 function formatDate(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -77,7 +77,7 @@ export function daysBetween(from: string, to: string) {
 
 export const weekday = (value: string) => parseDate(value).getDay();
 
-// Upcoming's days: every day from tomorrow through `end`, then any later day in `dates`, so a
+// All tasks' days: every day from tomorrow through `end`, then any later day in `dates`, so a
 // task due beyond the loaded range is never hidden.
 export function upcomingDays(today: string, end: string, dates: Iterable<string>) {
   const days: string[] = [];
@@ -280,7 +280,6 @@ export function matchesView(
   if (task.completed_at !== null) return false;
   if (view === "all") return true;
   if (view === "today") return !!task.due_date && task.due_date <= today;
-  if (view === "upcoming") return !!task.due_date && task.due_date > today;
   return false;
 }
 

@@ -14,6 +14,8 @@ export function TaskSection({
   overdue = false,
   zone,
   sourceOnly = false,
+  emptyText = "No tasks due today. A little room to breathe.",
+  summaryNoun = overdue ? "overdue" : "due today",
   children,
 }: {
   title: string;
@@ -25,6 +27,9 @@ export function TaskSection({
   // Its key as a drag-and-drop zone, and whether tasks can only be dragged out of it.
   zone?: string;
   sourceOnly?: boolean;
+  // What an empty section says, and what its collapsed summary calls its tasks ("3 overdue").
+  emptyText?: string;
+  summaryNoun?: string;
   children: ReactNode;
 }) {
   const id = useId();
@@ -54,7 +59,7 @@ export function TaskSection({
       </h2>
       <div id={id} className={styles["section-content"]}>
         {expanded ? (
-          tasks.length ? children : <p className={styles["section-empty"]}>No tasks due today. A little room to breathe.</p>
+          tasks.length ? children : <p className={styles["section-empty"]}>{emptyText}</p>
         ) : (
           <button
             type="button"
@@ -68,11 +73,11 @@ export function TaskSection({
             aria-controls={id}
           >
             <span className={styles["summary-copy"]}>
-              <strong>{count}{overdue ? " overdue" : " due today"}</strong>
+              <strong>{count} {summaryNoun}</strong>
               <span className={styles["summary-previews"]}>
                 {tasks.length ? tasks.slice(0, 3).map((task) => (
                   <span key={task.id}>{task.title}</span>
-                )) : <span>No tasks due today</span>}
+                )) : <span>{emptyText}</span>}
               </span>
               {tasks.length > 3 && <span className={styles["summary-more"]}>+{tasks.length - 3} more</span>}
             </span>

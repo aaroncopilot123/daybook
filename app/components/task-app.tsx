@@ -15,7 +15,6 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpRight,
-  CalendarDays,
   ChevronRight,
   CircleCheck,
   Hash,
@@ -78,12 +77,12 @@ type Confirmation = { title: string; message: string; action: () => void };
 type SortList = { ids: string[]; label?: string; zone?: string };
 // The toast's Undo: puts the change back and returns the toast that confirms it.
 type Undo = { run: () => string };
-// Upcoming loads this many days at a time as it scrolls.
+// All tasks loads this many days at a time as it scrolls.
 const UPCOMING_PAGE = 28;
-const blankDraft = (view: View): TaskDraft => ({
+const blankDraft = (): TaskDraft => ({
   title: "",
   description: "",
-  due_date: view === "upcoming" ? null : localDate(),
+  due_date: localDate(),
   project_id: null,
   priority: null,
   recurrence: null,
@@ -171,11 +170,12 @@ export default function TaskApp() {
   const [prioritySort, setPrioritySort] = useState(false);
   const [todayExpanded, setTodayExpanded] = useState(true);
   const [overdueExpanded, setOverdueExpanded] = useState(true);
-  // How many days ahead Upcoming shows every day; scrolling near the end loads more.
+  const [noDateExpanded, setNoDateExpanded] = useState(true);
+  // How many days ahead All tasks shows every day; scrolling near the end loads more.
   const [upcomingSpan, setUpcomingSpan] = useState(UPCOMING_PAGE);
   const upcomingSentinel = useRef<HTMLDivElement>(null);
   // Each view and project opens at the top. Kept where it was, a scroll clamped to the end of
-  // a shorter page would land on Upcoming's sentinel and keep loading days.
+  // a shorter page would land on All tasks' sentinel and keep loading days.
   useLayoutEffect(() => {
     window.scrollTo(0, 0);
   }, [view, selectedProjectId]);
@@ -212,11 +212,11 @@ export default function TaskApp() {
     return () => observer.disconnect();
   }, [view, searching, upcomingSpan, today, store.ready]);
   const addTask = useCallback((global = false) => {
-    const initial = blankDraft(view);
+    const initial = blankDraft();
     if (!global) initial.project_id = selectedProjectId;
     setComposer({ initial });
     setDrawer(false);
-  }, [view, selectedProjectId]);
+  }, [selectedProjectId]);
 
   useEffect(() => {
     const update = () => setToday(localDate());
@@ -271,14 +271,12 @@ export default function TaskApp() {
   const title = {
     all: "All tasks",
     today: "Today",
-    upcoming: "Upcoming",
     history: "History",
     projects: "My projects",
   }[view];
   const HeadingIcon = {
     all: ListTodo,
     today: Sun,
-    upcoming: CalendarDays,
     history: History,
     projects: Layers2,
   }[view];
@@ -314,7 +312,11 @@ export default function TaskApp() {
     (count, entry) => count + 1 + entry.subtasks.length,
     0,
   );
-  const overdueTasks = visibleTasks.filter(
+  // What each section lists: a subtask whose parent is shown sits under its parent instead.
+  const listedTasks = visibleTasks.filter(
+    (task) => task.parent_id === null || !shownParents.has(task.parent_id),
+  );
+  const overdueTasks = listedTasks.filter(
     (task) => task.due_date && task.due_date < today,
   );
   const overdueCount = overdueTasks.length;
@@ -327,34 +329,40 @@ export default function TaskApp() {
           task.due_date < today,
       ).length
     : overdueCount;
-  const dueTodayTasks = visibleTasks.filter((task) => task.due_date === today);
-  // Upcoming's tasks by day, and its days: every day through the loaded span, or only days
-  // with matches while searching.
+  const dueTodayTasks = listedTasks.filter((task) => task.due_date === today);
+  const noDateTasks = listedTasks.filter((task) => !task.due_date);
+  // All tasks' later tasks by day, and its days from tomorrow: every day through the loaded
+  // span, or only days with matches while searching.
   const tasksByDate = new Map<string, Task[]>();
-  for (const task of visibleTasks)
+  for (const task of listedTasks)
     if (task.due_date) tasksByDate.set(task.due_date, [...(tasksByDate.get(task.due_date) ?? []), task]);
   const upcomingEnd = today && addDays(today, upcomingSpan);
   const shownDays =
-    view !== "upcoming" || !today
+    view !== "all" || !today
       ? []
       : searching
-        ? [...tasksByDate.keys()].sort()
+        ? [...tasksByDate.keys()].filter((date) => date > today).sort()
         : upcomingDays(today, upcomingEnd, tasksByDate.keys());
-  // The tasks in a drop zone, and the date a task dropped there becomes due.
+  // The last of those days with a task. Empty days keep loading after it as places to plan
+  // into, so All tasks marks where its tasks end.
+  const lastTaskDay = shownDays.findLast((date) => tasksByDate.has(date));
+  // The tasks in a drop zone, the date a task dropped there becomes due (Overdue makes it due
+  // yesterday), and the zone's name.
   const zoneTasks = (zone: string) =>
     zone === "today"
       ? dueTodayTasks
       : zone === "overdue"
         ? overdueTasks
         : (tasksByDate.get(zone) ?? []);
-  const zoneDate = (zone: string) => (zone === "today" ? today : zone);
-  // The zone a move one place past the end of a list goes to. Overdue only gives tasks away,
-  // to Today above it; Upcoming's days run on from tomorrow.
+  const zoneDate = (zone: string) =>
+    zone === "today" ? today : zone === "overdue" ? addDays(today, -1) : zone;
+  const zoneName = (zone: string) => (zone === "overdue" ? "Overdue" : dayLabel(zoneDate(zone)));
+  // The drop zones in page order. A move one place past the end of a list goes to the next.
+  const zoneOrder =
+    view === "today" ? ["today", "overdue"] : view === "all" ? ["overdue", "today", ...shownDays] : [];
   function neighbourZone(zone: string, step: -1 | 1) {
-    if (zone === "today") return null;
-    if (zone === "overdue") return step < 0 ? "today" : null;
-    const next = addDays(zone, step);
-    return next > today ? next : null;
+    const index = zoneOrder.indexOf(zone);
+    return index < 0 ? null : (zoneOrder[index + step] ?? null);
   }
   const todayTasks = store.tasks.filter(
     (task) =>
@@ -414,7 +422,7 @@ export default function TaskApp() {
   function addSubtask(parent: Task) {
     setComposer({
       initial: {
-        ...blankDraft(view),
+        ...blankDraft(),
         due_date: null,
         project_id: parent.project_id,
         parent_id: parent.id,
@@ -436,6 +444,7 @@ export default function TaskApp() {
       if (next.trim()) {
         setTodayExpanded(true);
         setOverdueExpanded(true);
+        setNoDateExpanded(true);
       }
     }
     setQuery(next);
@@ -623,7 +632,11 @@ export default function TaskApp() {
     const ids = order.some((id) => id !== task.id) ? order : [...zoneIds(zone), task.id];
     const moved = store.rescheduleTask(task.id, date, ids);
     if (!moved) return;
-    setNotice(`Moved to ${dayInSentence(date)}`);
+    setNotice(
+      zone === "overdue"
+        ? `Moved to Overdue, due ${dayInSentence(date)}`
+        : `Moved to ${dayInSentence(date)}`,
+    );
     setUndo({
       run: () => {
         store.undoReschedule(moved);
@@ -734,7 +747,8 @@ export default function TaskApp() {
           task.parent_id === null && !task.completed_at ? () => addSubtask(task) : undefined
         }
         reorder={
-          !reorderBlock && index >= 0 && (list.ids.length > 1 || (list.zone && list.zone !== "today"))
+          // A row in a day's list can always go to another day, even alone in its list.
+          !reorderBlock && index >= 0 && (list.ids.length > 1 || !!list.zone)
             ? {
                 onGripDown: (event) =>
                   drag.start(event, (order, zone) =>
@@ -744,12 +758,9 @@ export default function TaskApp() {
                   ),
                 canMoveUp: index > 0 || !!above,
                 canMoveDown: index < list.ids.length - 1 || !!below,
-                moveUpLabel:
-                  index === 0 && above ? `Move to ${dayLabel(zoneDate(above))}` : undefined,
+                moveUpLabel: index === 0 && above ? `Move to ${zoneName(above)}` : undefined,
                 moveDownLabel:
-                  index === list.ids.length - 1 && below
-                    ? `Move to ${dayLabel(zoneDate(below))}`
-                    : undefined,
+                  index === list.ids.length - 1 && below ? `Move to ${zoneName(below)}` : undefined,
               }
             : undefined
         }
@@ -773,6 +784,55 @@ export default function TaskApp() {
       </ul>
     );
   }
+  // Today and Overdue, shared by the Today tab and All tasks.
+  const todaySection = (
+    <TaskSection
+      title="Today"
+      tasks={dueTodayTasks}
+      expanded={todayExpanded}
+      onToggle={() => setTodayExpanded((value) => !value)}
+      date={
+        today &&
+        new Date(`${today}T12:00:00`).toLocaleDateString("en", { month: "short", day: "numeric" })
+      }
+      zone="today"
+    >
+      {renderTasks(dueTodayTasks, "Today", "today")}
+    </TaskSection>
+  );
+  const overdueSection = (
+    <TaskSection
+      title="Overdue"
+      tasks={overdueTasks}
+      expanded={overdueExpanded}
+      onToggle={() => setOverdueExpanded((value) => !value)}
+      overdue
+      zone="overdue"
+      emptyText="Nothing overdue."
+    >
+      {renderTasks(overdueTasks, "Overdue", "overdue")}
+    </TaskSection>
+  );
+  // All tasks' end of the list: how many tasks it holds and the last day one is due. It's
+  // plain text, read in place rather than announced as tasks change.
+  const endCount = searching ? visibleTasks.length : shownRows;
+  const endNoun = searching ? "result" : "task";
+  const endProject = store.projects.find((project) => project.id === selectedProjectId)?.name;
+  const endOfTasks = (
+    <div className={sectionStyles["end-of-tasks"]}>
+      <p>
+        {endCount === 0
+          ? `${endProject ?? "Your list"} is clear`
+          : `${endCount === 1 ? `That’s the only ${endNoun}` : `That’s all ${endCount} ${endNoun}s`}${endProject ? ` in ${endProject}` : ""}`}
+      </p>
+      {!searching && (
+        <p>
+          {endCount === 0 ? "" : `Nothing due after ${dayInSentence(lastTaskDay ?? today)}. `}
+          The days below are open for planning.
+        </p>
+      )}
+    </div>
+  );
   const sidebarProps = {
     projectsExpanded,
     onToggleProjects: () => setProjectsExpanded((expanded) => !expanded),
@@ -868,11 +928,9 @@ export default function TaskApp() {
                   ? dateHeading
                   : view === "all"
                     ? "Everything you want to move forward"
-                    : view === "upcoming"
-                      ? "Make a little space for what’s next"
-                      : view === "history"
-                        ? "A little progress, remembered"
-                        : "Your ideas, a little more organized"}
+                    : view === "history"
+                      ? "A little progress, remembered"
+                      : "Your ideas, a little more organized"}
               </div>
               <div className={styles["page-heading"]}>
                 <h1>
@@ -904,14 +962,10 @@ export default function TaskApp() {
                 {view === "today"
                   ? "A fresh start. Let’s make it a good one."
                   : view === "all"
-                    ? "Your tasks, together in one place."
-                    : view === "upcoming"
-                      ? "A little planning goes a long way."
-                      : view === "history"
-                        ? "A record of what you’ve accomplished. Restore anything you want to revisit."
-                        : view === "projects"
-                          ? "Give the things that matter a space of their own."
-                          : "Small steps, meaningful progress."}
+                    ? "Your tasks, together in one place, day by day."
+                    : view === "history"
+                      ? "A record of what you’ve accomplished. Restore anything you want to revisit."
+                      : "Give the things that matter a space of their own."}
               </p>
               {view === "today" && (
                 <div className={styles["daily-progress"]}>
@@ -1034,39 +1088,32 @@ export default function TaskApp() {
                     )}
                   </div>
                   {view === "today" ? (
-                    // Overdue tasks can be dragged up into Today to make them due today.
+                    // Tasks drag between Today and Overdue: up to make them due today, down to
+                    // make them due yesterday.
                     <div data-sort-group>
-                      {(!searching || dueTodayTasks.length > 0) && (
-                        <TaskSection
-                          title="Today"
-                          tasks={dueTodayTasks}
-                          expanded={todayExpanded}
-                          onToggle={() => setTodayExpanded((value) => !value)}
-                          date={new Date(`${today}T12:00:00`).toLocaleDateString("en", {
-                            month: "short", day: "numeric",
-                          })}
-                          zone="today"
-                        >
-                          {renderTasks(dueTodayTasks, "Today", "today")}
-                        </TaskSection>
-                      )}
-                      {overdueCount > 0 && (
-                        <TaskSection
-                          title="Overdue"
-                          tasks={overdueTasks}
-                          expanded={overdueExpanded}
-                          onToggle={() => setOverdueExpanded((value) => !value)}
-                          overdue
-                          zone="overdue"
-                          sourceOnly
-                        >
-                          {renderTasks(overdueTasks, "Overdue", "overdue")}
-                        </TaskSection>
-                      )}
+                      {(!searching || dueTodayTasks.length > 0) && todaySection}
+                      {/* While dragging there's always an Overdue to drop into. */}
+                      {(overdueCount > 0 || drag.dragging) && overdueSection}
                     </div>
-                  ) : view === "upcoming" ? (
-                    // Every day is a drop zone: dragging a task to a day makes it due then.
+                  ) : view === "all" ? (
+                    // Overdue, Today and every day from tomorrow are drop zones: dragging a task
+                    // to one makes it due then. Tasks with no date only reorder among themselves.
                     <div className={sectionStyles["day-list"]} data-sort-group>
+                      {(!searching || overdueCount > 0) && overdueSection}
+                      {(!searching || dueTodayTasks.length > 0) && todaySection}
+                      {noDateTasks.length > 0 && (
+                        <TaskSection
+                          title="No date"
+                          tasks={noDateTasks}
+                          expanded={noDateExpanded}
+                          onToggle={() => setNoDateExpanded((value) => !value)}
+                          summaryNoun="with no date"
+                        >
+                          {renderTasks(noDateTasks, "No date")}
+                        </TaskSection>
+                      )}
+                      {/* Its tasks end after the last day with one, or here if none are due later. */}
+                      {!lastTaskDay && (!searching || endCount > 0) && endOfTasks}
                       {shownDays.map((date, i) => {
                         const tasks = tasksByDate.get(date) ?? [];
                         const month = date.slice(0, 7);
@@ -1096,6 +1143,7 @@ export default function TaskApp() {
                               </h3>
                               {tasks.length > 0 && renderTasks(tasks, dateLabel(date), date)}
                             </section>
+                            {date === lastTaskDay && endOfTasks}
                             {date === upcomingEnd && !searching && (
                               <div ref={upcomingSentinel} aria-hidden="true" />
                             )}
@@ -1128,7 +1176,7 @@ export default function TaskApp() {
                         >
                           Clear search
                         </button>
-                        {(view === "today" || view === "upcoming") && (
+                        {view === "today" && (
                           <button
                             type="button"
                             className="button secondary"
@@ -1143,28 +1191,15 @@ export default function TaskApp() {
                       </div>
                     </div>
                   )}
-                  {!searching && visibleTasks.length === 0 && view !== "today" && view !== "upcoming" && (
+                  {!searching && visibleTasks.length === 0 && view === "history" && (
                     <div className={styles["empty-state"]}>
                       <span>
-                        {view === "history" ? (
-                          <History size={27} />
-                        ) : view === "all" ? (
-                          <ListTodo size={27} />
-                        ) : (
-                          <CalendarDays size={27} />
-                        )}
+                        <History size={27} />
                       </span>
-                      <h2>
-                        {view === "history"
-                          ? "Your progress starts here"
-                          : "A fresh page"}
-                      </h2>
+                      <h2>Your progress starts here</h2>
                       <p>
-                        {view === "history"
-                          ? "Completed tasks will appear here. Restore one whenever you need to revisit it."
-                          : selectedProjectId
-                            ? "No tasks match this view for this project. Choose All projects to see more."
-                            : "Add a task and take the first small step."}
+                        Completed tasks will appear here. Restore one whenever you need to revisit
+                        it.
                       </p>
                     </div>
                   )}

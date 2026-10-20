@@ -2,7 +2,6 @@
 
 import { useId } from "react";
 import {
-  CalendarDays,
   CheckCheck,
   ChevronDown,
   ChevronsLeft,
@@ -50,7 +49,6 @@ export function Sidebar({
   const links = [
     { id: "all" as const, label: "All tasks", Icon: ListTodo },
     { id: "today" as const, label: "Today", Icon: Sun },
-    { id: "upcoming" as const, label: "Upcoming", Icon: CalendarDays },
     { id: "history" as const, label: "History", Icon: History },
   ];
   return (

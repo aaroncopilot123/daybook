@@ -121,7 +121,7 @@
 .section-heading + .task-list {
   margin-top: 12px;
 }
-/* Upcoming: every day in a row, grouped by month. */
+/* All tasks: every day in a row, grouped by month. */
 .day-list {
   display: flex;
   flex-direction: column;
@@ -147,6 +147,40 @@
   font-weight: 400;
   color: var(--muted);
   border-bottom-color: var(--subtle-border);
+}
+/* Where the tasks end: a centred rule between days, so it doesn't read as one. */
+.end-of-tasks {
+  margin: 32px 0 26px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.end-of-tasks > p {
+  margin: 0;
+  text-wrap: balance;
+}
+.end-of-tasks > p:first-child {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 12px;
+  font-weight: 510;
+  color: var(--secondary);
+}
+.end-of-tasks > p:first-child::before,
+.end-of-tasks > p:first-child::after {
+  content: "";
+  flex: 1;
+  min-width: 24px;
+  height: 1px;
+  background: var(--border);
+}
+.end-of-tasks > p + p {
+  margin-top: 6px;
+}
+.end-of-tasks + .month-heading {
+  margin-top: 0;
 }
 /* Drop zones while a task is dragged over them. The highlight and the end-of-list line are
    drawn outside the layout, so nothing moves under the pointer. */
@@ -193,6 +227,10 @@
   .task-section[data-sort-zone][data-drop-end]::after,
   .day-section[data-drop-end]::after {
     background: Highlight;
+  }
+  .end-of-tasks > p:first-child::before,
+  .end-of-tasks > p:first-child::after {
+    background: GrayText;
   }
 }
 @media (max-width: 767px) {
