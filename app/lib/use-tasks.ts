@@ -15,13 +15,13 @@ import {
   type TaskDraft,
 } from "./tasks";
 
-const emptySnapshot: Snapshot = { version: 3, tasks: [], projects: [] };
+const emptySnapshot: Snapshot = { version: 4, tasks: [], projects: [] };
 
 // What toggleTask changed, so the toast's Undo can put it all back.
 export type ToggleUndo = {
   id: string;
   // Every task the toggle changed, as it was before.
-  previous: Array<Pick<Task, "id" | "completedAt" | "recurrence">>;
+  previous: Array<Pick<Task, "id" | "completed_at" | "recurrence">>;
   // The next occurrence of a recurring task, with fresh copies of its subtasks.
   spawned?: { id: string; dueDate: string; childIds: string[] };
   // Subtasks completed or restored along with their parent.
@@ -88,19 +88,19 @@ export function useTasks() {
     const now = new Date().toISOString();
     const tasks = currentData.current.tasks;
     const taskId = id ?? newId();
-    const existing = tasks.filter((task) => task.parentId === taskId);
+    const existing = tasks.filter((task) => task.parent_id === taskId);
     // Subtasks hang off a top-level task, share its project and never repeat.
     const parent = existing.length
       ? undefined
-      : tasks.find((task) => task.id === draft.parentId && task.parentId === null);
+      : tasks.find((task) => task.id === draft.parent_id && task.parent_id === null);
     const fixed: TaskDraft = {
       ...draft,
-      parentId: parent?.id ?? null,
-      projectId: parent ? parent.projectId : draft.projectId,
+      parent_id: parent?.id ?? null,
+      project_id: parent ? parent.project_id : draft.project_id,
       recurrence: parent ? null : draft.recurrence,
     };
     // A subtask can't have subtasks; without a list the subtasks stay as they are.
-    const wanted = fixed.parentId === null ? subtasks : undefined;
+    const wanted = fixed.parent_id === null ? subtasks : undefined;
     const keptIds = new Set(wanted?.flatMap((line) => (line.id ? [line.id] : [])));
     const removed = new Set(
       wanted ? existing.filter((child) => !keptIds.has(child.id)).map((child) => child.id) : [],
@@ -115,19 +115,19 @@ export function useTasks() {
       // An emptied title keeps the old one.
       const title = line.title.trim();
       if (title && title !== child.title) change.title = title;
-      if (line.done && !child.completedAt) {
-        change.completedAt = now;
+      if (line.done && !child.completed_at) {
+        change.completed_at = now;
         completed++;
-      } else if (!line.done && child.completedAt) {
-        change.completedAt = null;
+      } else if (!line.done && child.completed_at) {
+        change.completed_at = null;
         reopened++;
       }
       if (Object.keys(change).length) changes.set(child.id, change);
     }
     let moved = 0;
     for (const child of existing)
-      if (!removed.has(child.id) && child.projectId !== fixed.projectId) {
-        changes.set(child.id, { ...changes.get(child.id), projectId: fixed.projectId });
+      if (!removed.has(child.id) && child.project_id !== fixed.project_id) {
+        changes.set(child.id, { ...changes.get(child.id), project_id: fixed.project_id });
         moved++;
       }
     const added: Task[] = (wanted ?? [])
@@ -136,15 +136,15 @@ export function useTasks() {
         id: newId(),
         title: line.title.trim(),
         description: "",
-        projectId: fixed.projectId,
-        dueDate: null,
+        project_id: fixed.project_id,
+        due_date: null,
         priority: null,
         recurrence: null,
-        parentId: taskId,
-        completedAt: line.done ? now : null,
+        parent_id: taskId,
+        completed_at: line.done ? now : null,
         // A millisecond apart, so they keep the order they were typed in.
-        createdAt: new Date(Date.parse(now) + i + 1).toISOString(),
-        updatedAt: now,
+        created_at: new Date(Date.parse(now) + i + 1).toISOString(),
+        updated_at: now,
       }));
     commit((current) => ({
       ...current,
@@ -152,13 +152,13 @@ export function useTasks() {
         ...current.tasks
           .filter((task) => !removed.has(task.id))
           .map((task) => {
-            if (id && task.id === id) return { ...task, ...fixed, updatedAt: now };
+            if (id && task.id === id) return { ...task, ...fixed, updated_at: now };
             const change = changes.get(task.id);
-            return change ? { ...task, ...change, updatedAt: now } : task;
+            return change ? { ...task, ...change, updated_at: now } : task;
           }),
         ...(id
           ? []
-          : [{ ...fixed, id: taskId, completedAt: null, createdAt: now, updatedAt: now }]),
+          : [{ ...fixed, id: taskId, completed_at: null, created_at: now, updated_at: now }]),
         ...added,
       ],
     }));
@@ -181,27 +181,27 @@ export function useTasks() {
     const task = tasks.find((item) => item.id === id);
     if (!task) return null;
     const now = new Date().toISOString();
-    const children = tasks.filter((item) => item.parentId === id);
-    const parent = tasks.find((item) => item.id === task.parentId);
+    const children = tasks.filter((item) => item.parent_id === id);
+    const parent = tasks.find((item) => item.id === task.parent_id);
     const changes = new Map<string, Partial<Task>>();
     let cascaded = 0;
     let reopenedParent = false;
-    if (!task.completedAt) {
-      changes.set(id, { completedAt: now });
+    if (!task.completed_at) {
+      changes.set(id, { completed_at: now });
       for (const child of children)
-        if (!child.completedAt) {
-          changes.set(child.id, { completedAt: now });
+        if (!child.completed_at) {
+          changes.set(child.id, { completed_at: now });
           cascaded++;
         }
     } else {
-      changes.set(id, { completedAt: null, recurrence: null });
+      changes.set(id, { completed_at: null, recurrence: null });
       for (const child of children)
-        if (child.completedAt === task.completedAt) {
-          changes.set(child.id, { completedAt: null });
+        if (child.completed_at === task.completed_at) {
+          changes.set(child.id, { completed_at: null });
           cascaded++;
         }
-      if (parent?.completedAt) {
-        changes.set(parent.id, { completedAt: null, recurrence: null });
+      if (parent?.completed_at) {
+        changes.set(parent.id, { completed_at: null, recurrence: null });
         reopenedParent = true;
       }
     }
@@ -209,20 +209,20 @@ export function useTasks() {
       id,
       previous: tasks
         .filter((item) => changes.has(item.id))
-        .map(({ id, completedAt, recurrence }) => ({ id, completedAt, recurrence })),
+        .map(({ id, completed_at, recurrence }) => ({ id, completed_at, recurrence })),
       cascaded,
       reopenedParent,
     };
     let spawnedTasks: Task[] = [];
-    if (!task.completedAt && task.recurrence && task.dueDate) {
-      const dueDate = nextDueDate(task.recurrence, task.dueDate, localDate());
-      const shift = daysBetween(task.dueDate, dueDate);
+    if (!task.completed_at && task.recurrence && task.due_date) {
+      const dueDate = nextDueDate(task.recurrence, task.due_date, localDate());
+      const shift = daysBetween(task.due_date, dueDate);
       const next = { ...task, id: newId(), dueDate, completedAt: null, updatedAt: now };
       const copies = children.map((child) => ({
         ...child,
         id: newId(),
         parentId: next.id,
-        dueDate: child.dueDate && addDays(child.dueDate, shift),
+        dueDate: child.due_date && addDays(child.due_date, shift),
         completedAt: null,
         updatedAt: now,
       }));
@@ -234,7 +234,7 @@ export function useTasks() {
       tasks: [
         ...current.tasks.map((item) => {
           const change = changes.get(item.id);
-          return change ? { ...item, ...change, updatedAt: now } : item;
+          return change ? { ...item, ...change, updated_at: now } : item;
         }),
         ...spawnedTasks,
       ],
@@ -252,7 +252,7 @@ export function useTasks() {
         .filter((task) => !removed.has(task.id))
         .map((task) => {
           const before = previous.get(task.id);
-          return before ? { ...task, ...before, updatedAt: now } : task;
+          return before ? { ...task, ...before, updated_at: now } : task;
         }),
     }));
   }
@@ -261,7 +261,7 @@ export function useTasks() {
   function deleteTask(id: string) {
     commit((current) => ({
       ...current,
-      tasks: current.tasks.filter((task) => task.id !== id && task.parentId !== id),
+      tasks: current.tasks.filter((task) => task.id !== id && task.parent_id !== id),
     }));
   }
 
@@ -283,8 +283,8 @@ export function useTasks() {
       ...current,
       projects: current.projects.filter((project) => project.id !== id),
       tasks: current.tasks.map((task) =>
-        task.projectId === id
-          ? { ...task, projectId: null, updatedAt: new Date().toISOString() }
+        task.project_id === id
+          ? { ...task, project_id: null, updated_at: new Date().toISOString() }
           : task,
       ),
     }));

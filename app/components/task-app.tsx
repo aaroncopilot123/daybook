@@ -66,11 +66,11 @@ type Confirmation = { title: string; message: string; action: () => void };
 const blankDraft = (view: View): TaskDraft => ({
   title: "",
   description: "",
-  dueDate: view === "upcoming" ? null : localDate(),
-  projectId: null,
+  due_date: view === "upcoming" ? null : localDate(),
+  project_id: null,
   priority: null,
   recurrence: null,
-  parentId: null,
+  parent_id: null,
 });
 
 export default function TaskApp() {
@@ -124,7 +124,7 @@ export default function TaskApp() {
   const [overdueExpanded, setOverdueExpanded] = useState(true);
   const addTask = useCallback((global = false) => {
     const initial = blankDraft(view);
-    if (!global) initial.projectId = selectedProjectId;
+    if (!global) initial.project_id = selectedProjectId;
     setComposer({ initial });
     setDrawer(false);
   }, [view, selectedProjectId]);
@@ -200,23 +200,23 @@ export default function TaskApp() {
     )
     .sort((a, b) =>
       view === "history"
-        ? b.completedAt!.localeCompare(a.completedAt!) ||
-          b.createdAt.localeCompare(a.createdAt)
+        ? b.completed_at!.localeCompare(a.completed_at!) ||
+          b.created_at.localeCompare(a.created_at)
         : prioritySort
           ? (a.priority ?? 5) - (b.priority ?? 5) ||
-            a.createdAt.localeCompare(b.createdAt)
-          : a.createdAt.localeCompare(b.createdAt),
+            a.created_at.localeCompare(b.created_at)
+          : a.created_at.localeCompare(b.created_at),
     );
   // Parents shown anywhere in the view carry their subtasks; see nestTasks.
   const shownParents = new Set(
-    visibleTasks.filter((task) => task.parentId === null).map((task) => task.id),
+    visibleTasks.filter((task) => task.parent_id === null).map((task) => task.id),
   );
   const shownRows = nestTasks(visibleTasks, store.tasks, shownParents).reduce(
     (count, entry) => count + 1 + entry.subtasks.length,
     0,
   );
   const overdueTasks = visibleTasks.filter(
-    (task) => task.dueDate && task.dueDate < today,
+    (task) => task.due_date && task.due_date < today,
   );
   const overdueCount = overdueTasks.length;
   // The progress card ignores the search.
@@ -224,17 +224,17 @@ export default function TaskApp() {
     ? store.tasks.filter(
         (task) =>
           matchesView(task, view, today, selectedProjectId) &&
-          task.dueDate &&
-          task.dueDate < today,
+          task.due_date &&
+          task.due_date < today,
       ).length
     : overdueCount;
-  const dueTodayTasks = visibleTasks.filter((task) => task.dueDate === today);
+  const dueTodayTasks = visibleTasks.filter((task) => task.due_date === today);
   const todayTasks = store.tasks.filter(
     (task) =>
-      task.dueDate === today &&
-      (selectedProjectId === null || task.projectId === selectedProjectId),
+      task.due_date === today &&
+      (selectedProjectId === null || task.project_id === selectedProjectId),
   );
-  const todayCompleted = todayTasks.filter((task) => task.completedAt).length;
+  const todayCompleted = todayTasks.filter((task) => task.completed_at).length;
   const progress = todayTasks.length
     ? Math.round((todayCompleted / todayTasks.length) * 100)
     : 0;
@@ -263,21 +263,21 @@ export default function TaskApp() {
       initial: {
         title: task.title,
         description: task.description,
-        projectId: task.projectId,
-        dueDate: task.dueDate,
+        project_id: task.project_id,
+        due_date: task.due_date,
         priority: task.priority,
         recurrence: task.recurrence,
-        parentId: task.parentId,
+        parent_id: task.parent_id,
       },
       id: task.id,
-      completed: !!task.completedAt,
-      parentTitle: store.tasks.find((item) => item.id === task.parentId)?.title,
+      completed: !!task.completed_at,
+      parentTitle: store.tasks.find((item) => item.id === task.parent_id)?.title,
       subtasks:
-        task.parentId === null
+        task.parent_id === null
           ? childrenOf(store.tasks, task.id).map((child) => ({
               id: child.id,
               title: child.title,
-              done: !!child.completedAt,
+              done: !!child.completed_at,
             }))
           : undefined,
     });
@@ -286,9 +286,9 @@ export default function TaskApp() {
     setComposer({
       initial: {
         ...blankDraft(view),
-        dueDate: null,
-        projectId: parent.projectId,
-        parentId: parent.id,
+        due_date: null,
+        project_id: parent.project_id,
+        parent_id: parent.id,
       },
       parentTitle: parent.title,
     });
@@ -321,8 +321,8 @@ export default function TaskApp() {
   function saveTask(draft: TaskDraft, subtaskLines?: SubtaskDraft[]) {
     const editing = !!composer?.id;
     const saved = store.saveTask(draft, composer?.id, subtaskLines);
-    const projectName = store.projects.find((project) => project.id === draft.projectId)?.name;
-    if (!editing && draft.parentId) setEnteringIds(new Set([saved.id]));
+    const projectName = store.projects.find((project) => project.id === draft.project_id)?.name;
+    if (!editing && draft.parent_id) setEnteringIds(new Set([saved.id]));
     if (editing && saved.added.length) {
       setEnteringIds(new Set(saved.added));
       // Show the list the new subtasks land in.
@@ -333,7 +333,7 @@ export default function TaskApp() {
       });
     }
     const hidden =
-      searching && !draft.parentId && view !== "history" && !matchesSearch(draft, terms);
+      searching && !draft.parent_id && view !== "history" && !matchesSearch(draft, terms);
     // "2 subtasks added, 1 completed, 1 deleted"
     const changes = (
       [
@@ -346,7 +346,7 @@ export default function TaskApp() {
       .filter(([count]) => count)
       .map(([count, verb], index) => (index ? `${count} ${verb}` : `${subtasks(count)} ${verb}`))
       .join(", ");
-    const sentences = draft.parentId
+    const sentences = draft.parent_id
       ? [editing ? "Subtask updated" : "Subtask added"]
       : editing
         ? [
@@ -379,11 +379,11 @@ export default function TaskApp() {
       const ids = [
         undo.spawned?.id,
         task.id,
-        ...(task.parentId
+        ...(task.parent_id
           ? [
               row.nextElementSibling?.getAttribute("data-task-id"),
               row.previousElementSibling?.getAttribute("data-task-id"),
-              task.parentId,
+              task.parent_id,
             ]
           : [after?.getAttribute("data-task-id")]),
       ];
@@ -401,9 +401,9 @@ export default function TaskApp() {
   }
   function toggleNotice(task: Task, undo: ToggleUndo) {
     const next = undo.spawned ? ` Next due ${dayInSentence(undo.spawned.dueDate)}.` : "";
-    if (task.completedAt) {
+    if (task.completed_at) {
       if (undo.reopenedParent) return "Subtask and its parent restored";
-      if (task.parentId) return "Subtask restored to incomplete";
+      if (task.parent_id) return "Subtask restored to incomplete";
       if (task.recurrence)
         return undo.cascaded
           ? `Restored as a one-off task with ${subtasks(undo.cascaded)}`
@@ -412,8 +412,8 @@ export default function TaskApp() {
         ? `Task and ${subtasks(undo.cascaded)} restored`
         : "Task restored to incomplete";
     }
-    if (task.parentId) {
-      const { done, total } = subtaskProgress(store.tasks, task.parentId);
+    if (task.parent_id) {
+      const { done, total } = subtaskProgress(store.tasks, task.parent_id);
       return done + 1 === total
         ? `Subtask completed. All ${total} done.`
         : `Subtask completed. ${done + 1} of ${total} done.`;
@@ -422,11 +422,11 @@ export default function TaskApp() {
     return next ? `Task completed.${next}` : "Task completed. A little progress.";
   }
   function deleteTask(task: Task) {
-    const repeating = task.recurrence && !task.completedAt;
-    const children = store.tasks.filter((item) => item.parentId === task.id).length;
+    const repeating = task.recurrence && !task.completed_at;
+    const children = store.tasks.filter((item) => item.parent_id === task.id).length;
     const its = children === 1 ? "its subtask" : `its ${children} subtasks`;
     setConfirmation({
-      title: task.parentId
+      title: task.parent_id
         ? "Delete subtask?"
         : children
           ? "Delete task and subtasks?"
@@ -443,7 +443,7 @@ export default function TaskApp() {
       action: () => {
         store.deleteTask(task.id);
         setNotice(
-          task.parentId
+          task.parent_id
             ? "Subtask deleted"
             : children
               ? `Task and ${subtasks(children)} deleted`
@@ -466,17 +466,17 @@ export default function TaskApp() {
   function renderRow(task: Task, parent: Task | null, children: Task[], nested = false) {
     // Open by default, except in History; a search also opens lists with matching subtasks.
     const expanded =
-      (!task.completedAt || (searching && children.some((child) => matchesSearch(child, terms)))) !==
+      (!task.completed_at || (searching && children.some((child) => matchesSearch(child, terms)))) !==
       toggledSubtasks.has(task.id);
     return (
       <TaskRow
         key={task.id}
         task={task}
-        project={store.projects.find((project) => project.id === task.projectId)}
+        project={store.projects.find((project) => project.id === task.project_id)}
         parent={parent}
         subtask={nested}
         terms={searching ? terms : undefined}
-        progress={task.parentId ? undefined : subtaskProgress(store.tasks, task.id)}
+        progress={task.parent_id ? undefined : subtaskProgress(store.tasks, task.id)}
         subtasks={
           children.length
             ? {
@@ -498,7 +498,7 @@ export default function TaskApp() {
         onEdit={() => editTask(task)}
         onDelete={() => deleteTask(task)}
         onAddSubtask={
-          task.parentId === null && !task.completedAt ? () => addSubtask(task) : undefined
+          task.parent_id === null && !task.completed_at ? () => addSubtask(task) : undefined
         }
       />
     );
@@ -700,8 +700,8 @@ export default function TaskApp() {
                             {
                               store.tasks.filter(
                                 (task) =>
-                                  task.projectId === project.id &&
-                                  !task.completedAt,
+                                  task.project_id === project.id &&
+                                  !task.completed_at,
                               ).length
                             }{" "}
                             active tasks
@@ -798,7 +798,7 @@ export default function TaskApp() {
                       )}
                     </>
                   ) : view === "upcoming" ? (
-                    [...new Set(visibleTasks.map((task) => task.dueDate!))]
+                    [...new Set(visibleTasks.map((task) => task.due_date!))]
                       .sort()
                       .map((date) => (
                         <section className={sectionStyles["task-section"]} key={date}>
@@ -807,7 +807,7 @@ export default function TaskApp() {
                             <span>
                               {
                                 visibleTasks.filter(
-                                  (task) => task.dueDate === date,
+                                  (task) => task.due_date === date,
                                 ).length
                               }
                             </span>
@@ -820,7 +820,7 @@ export default function TaskApp() {
                           </h2>
                           {renderTasks(
                             visibleTasks.filter(
-                              (task) => task.dueDate === date,
+                              (task) => task.due_date === date,
                             ),
                           )}
                         </section>
@@ -922,7 +922,7 @@ export default function TaskApp() {
       {composer && (
         <Dialog
           title={
-            composer.initial.parentId
+            composer.initial.parent_id
               ? composer.id
                 ? "Edit subtask"
                 : "Add subtask"
@@ -1037,7 +1037,7 @@ export default function TaskApp() {
                 store.undoToggle(undoCompletion);
                 setNotice(
                   undoCompletion.previous.find((item) => item.id === undoCompletion.id)
-                    ?.completedAt
+                    ?.completed_at
                     ? "Restore undone"
                     : "Completion undone",
                 );

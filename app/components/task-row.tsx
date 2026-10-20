@@ -84,11 +84,11 @@ export function TaskRow({
   const subtasksId = useId();
   // A subtask completed together with its shown parent doesn't repeat the parent's time.
   const showCompletion =
-    !!task.completedAt &&
-    !(subtask && parent?.completedAt && minute(parent.completedAt) === minute(task.completedAt));
+    !!task.completed_at &&
+    !(subtask && parent?.completed_at && minute(parent.completed_at) === minute(task.completed_at));
   const shownProject = subtask ? undefined : project;
   const hasMetadata = !!(
-    task.dueDate ||
+    task.due_date ||
     shownProject ||
     task.priority ||
     showCompletion ||
@@ -104,13 +104,13 @@ export function TaskRow({
       onAnimationEnd={rolledOver ? onRolledOver : undefined}
     >
       <div
-        className={`${styles["task-row"]} ${task.completedAt ? styles["is-completed"] : ""} ${subtaskCount ? styles["has-subtasks"] : ""}`}
+        className={`${styles["task-row"]} ${task.completed_at ? styles["is-completed"] : ""} ${subtaskCount ? styles["has-subtasks"] : ""}`}
       >
         <button
           className={styles["completion-target"]}
-          aria-label={`${task.completedAt ? "Restore" : "Complete"} ${task.title}`}
+          aria-label={`${task.completed_at ? "Restore" : "Complete"} ${task.title}`}
           aria-describedby={hasMetadata ? metadataId : undefined}
-          aria-pressed={!!task.completedAt}
+          aria-pressed={!!task.completed_at}
           onClick={onToggle}
         >
           <span className={styles["completion-circle"]}>
@@ -142,10 +142,10 @@ export function TaskRow({
               {parent && !subtask && (
                 <span className="sr-only">Subtask of {parent.title}.</span>
               )}
-              {showCompletion && task.completedAt && (
+              {showCompletion && task.completed_at && (
                 <span className={styles["completion-date"]}>
                   Completed{" "}
-                  {new Date(task.completedAt).toLocaleString("en", {
+                  {new Date(task.completed_at).toLocaleString("en", {
                     month: "short",
                     day: "numeric",
                     year: "numeric",
@@ -154,19 +154,19 @@ export function TaskRow({
                   })}
                 </span>
               )}
-              {task.dueDate && (
+              {task.due_date && (
                 <span
                   className={
-                    !task.completedAt && task.dueDate < localDate()
+                    !task.completed_at && task.due_date < localDate()
                       ? styles["overdue-date"]
-                      : task.dueDate === localDate()
+                      : task.due_date === localDate()
                         ? styles["today-date"]
                         : ""
                   }
                 >
                   <CalendarDays size={12} />
-                  {dateLabel(task.dueDate)}
-                  {!task.completedAt && task.dueDate < localDate()
+                  {dateLabel(task.due_date)}
+                  {!task.completed_at && task.due_date < localDate()
                     ? " · Overdue"
                     : ""}
                 </span>
@@ -175,11 +175,11 @@ export function TaskRow({
                 <span className={styles["repeat-label"]}>
                   <Repeat size={12} aria-hidden="true" />
                   <span aria-hidden="true">
-                    {recurrenceLabel(task.recurrence, task.dueDate)}
+                    {recurrenceLabel(task.recurrence, task.due_date)}
                   </span>
                   <span className="sr-only">
                     Repeats{" "}
-                    {recurrenceLabel(task.recurrence, task.dueDate, "sentence")}
+                    {recurrenceLabel(task.recurrence, task.due_date, "sentence")}
                   </span>
                 </span>
               )}
@@ -205,7 +205,7 @@ export function TaskRow({
             </span>
           )}
         </button>
-        {task.completedAt && (
+        {task.completed_at && (
           <button
             className={styles["restore-button"]}
             aria-label={`Restore ${task.title} to incomplete`}
@@ -242,7 +242,7 @@ export function TaskRow({
               }}
             >
               <Pencil size={14} />
-              {task.parentId ? "Edit subtask" : "Edit task"}
+              {task.parent_id ? "Edit subtask" : "Edit task"}
             </button>
             {onAddSubtask && (
               <button
@@ -263,7 +263,7 @@ export function TaskRow({
               }}
             >
               <Trash2 size={14} />
-              {task.parentId ? "Delete subtask" : "Delete task"}
+              {task.parent_id ? "Delete subtask" : "Delete task"}
             </button>
           </div>
         </details>
@@ -278,7 +278,7 @@ export function TaskRow({
                 onClick={subtasks.onToggle}
               >
                 <ChevronDown size={14} aria-hidden="true" />
-                {task.completedAt ? (
+                {task.completed_at ? (
                   <>
                     {plural(subtaskCount)}
                     <span className="sr-only"> of {task.title}</span>

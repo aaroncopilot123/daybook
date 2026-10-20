@@ -9,29 +9,29 @@ export type Task = {
   id: string;
   title: string;
   description: string;
-  projectId: string | null;
-  dueDate: string | null;
+  project_id: string | null;
+  due_date: string | null;
   priority: Priority;
   recurrence: Recurrence | null;
   // One level deep: a subtask's parent is always a top-level task, and a subtask shares its
   // parent's project and never repeats.
-  parentId: string | null;
-  completedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
+  parent_id: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
 };
 export type Project = { id: string; name: string };
 export type TaskDraft = Pick<
   Task,
   | "title"
   | "description"
-  | "projectId"
-  | "dueDate"
+  | "project_id"
+  | "due_date"
   | "priority"
   | "recurrence"
-  | "parentId"
+  | "parent_id"
 >;
-export type Snapshot = { version: 3; tasks: Task[]; projects: Project[] };
+export type Snapshot = { version: 4; tasks: Task[]; projects: Project[] };
 export type View = "all" | "today" | "upcoming" | "history" | "projects";
 
 function formatDate(date: Date) {
@@ -263,26 +263,26 @@ export function matchesView(
   today: string,
   projectId: string | null = null,
 ) {
-  if (projectId !== null && task.projectId !== projectId) return false;
-  if (view === "history") return task.completedAt !== null;
-  if (task.completedAt !== null) return false;
+  if (projectId !== null && task.project_id !== projectId) return false;
+  if (view === "history") return task.completed_at !== null;
+  if (task.completed_at !== null) return false;
   if (view === "all") return true;
-  if (view === "today") return !!task.dueDate && task.dueDate <= today;
-  if (view === "upcoming") return !!task.dueDate && task.dueDate > today;
+  if (view === "today") return !!task.due_date && task.due_date <= today;
+  if (view === "upcoming") return !!task.due_date && task.due_date > today;
   return false;
 }
 
 // Subtasks in creation order.
 export function childrenOf(tasks: Task[], id: string) {
   return tasks
-    .filter((task) => task.parentId === id)
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    .filter((task) => task.parent_id === id)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
 }
 
 export function subtaskProgress(tasks: Task[], id: string) {
-  const children = tasks.filter((task) => task.parentId === id);
+  const children = tasks.filter((task) => task.parent_id === id);
   return {
-    done: children.filter((task) => task.completedAt).length,
+    done: children.filter((task) => task.completed_at).length,
     total: children.length,
   };
 }
@@ -303,21 +303,21 @@ export function nestTasks(
   shownParents: ReadonlySet<string>,
 ): TaskEntry[] {
   return listed.flatMap((task): TaskEntry[] => {
-    if (task.parentId === null)
+    if (task.parent_id === null)
       return [
         {
           task,
           parent: null,
           subtasks: childrenOf(all, task.id).filter(
-            (child) => !child.completedAt === !task.completedAt,
+            (child) => !child.completed_at === !task.completed_at,
           ),
         },
       ];
-    if (shownParents.has(task.parentId)) return [];
+    if (shownParents.has(task.parent_id)) return [];
     return [
       {
         task,
-        parent: all.find((item) => item.id === task.parentId) ?? null,
+        parent: all.find((item) => item.id === task.parent_id) ?? null,
         subtasks: [],
       },
     ];
@@ -386,17 +386,17 @@ export function seedSnapshot(): Snapshot {
     id: `sample-child-${i}`,
     title,
     description: "",
-    projectId: "personal",
-    dueDate: null,
+    project_id: "personal",
+    due_date: null,
     priority: null,
     recurrence: null,
-    parentId: "sample-5",
-    completedAt: null,
-    createdAt: now,
-    updatedAt: now,
+    parent_id: "sample-5",
+    completed_at: null,
+    created_at: now,
+    updated_at: now,
   }));
   return {
-    version: 3,
+    version: 4,
     projects,
     tasks: [
       ...items.map(
@@ -404,18 +404,34 @@ export function seedSnapshot(): Snapshot {
         id: `sample-${i}`,
         title,
         description,
-        projectId,
-        dueDate: offset === null ? null : localDate(offset),
+        project_id: projectId,
+        due_date: offset === null ? null : localDate(offset),
         priority,
         recurrence: recurrence ?? null,
-        parentId: null,
-        completedAt: done ? now : null,
-        createdAt: now,
-        updatedAt: now,
+        parent_id: null,
+        completed_at: done ? now : null,
+        created_at: now,
+        updated_at: now,
       })),
       ...subtasks,
     ],
   };
+}
+
+const LEGACY_KEYS: Record<string, string> = {
+  projectId: "project_id",
+  dueDate: "due_date",
+  parentId: "parent_id",
+  completedAt: "completed_at",
+  createdAt: "created_at",
+  updatedAt: "updated_at",
+};
+
+// Saved tasks from before version 4 used camelCase keys.
+function snakeCaseKeys(task: Record<string, unknown>) {
+  return Object.fromEntries(
+    Object.entries(task).map(([key, value]) => [LEGACY_KEYS[key] ?? key, value]),
+  );
 }
 
 export const STORAGE_KEY = "daybook.tasks.v1";
@@ -430,20 +446,20 @@ export function loadSnapshot(): Snapshot {
     typeof value === "string" && Number.isFinite(Date.parse(value));
   if (
     !record(data) ||
-    ![1, 2, 3].includes(data.version as number) ||
+    ![1, 2, 3, 4].includes(data.version as number) ||
     !Array.isArray(data.projects) ||
     !Array.isArray(data.tasks)
   )
     throw new Error("Invalid saved data");
-  // Version 1 predates recurring tasks; version 2 predates subtasks.
+  // Version 1 predates recurring tasks; version 2 predates subtasks; version 3 used camelCase keys.
   const version = data.version as number;
   const tasks: unknown[] = data.tasks.map((t: unknown) =>
     !record(t)
       ? t
       : {
-          ...t,
+          ...(version < 4 ? snakeCaseKeys(t) : t),
           ...(version < 2 && { recurrence: null }),
-          ...(version < 3 && { parentId: null }),
+          ...(version < 3 && { parent_id: null }),
         },
   );
   if (
@@ -467,16 +483,16 @@ export function loadSnapshot(): Snapshot {
         typeof t.title === "string" &&
         t.title.trim() &&
         typeof t.description === "string" &&
-        (t.projectId === null ||
-          (typeof t.projectId === "string" && projectIds.has(t.projectId))) &&
-        (t.dueDate === null || isDate(t.dueDate)) &&
+        (t.project_id === null ||
+          (typeof t.project_id === "string" && projectIds.has(t.project_id))) &&
+        (t.due_date === null || isDate(t.due_date)) &&
         (t.priority === null || [1, 2, 3, 4].includes(t.priority as number)) &&
         (t.recurrence === null ||
-          (validRecurrence(t.recurrence) && t.dueDate !== null)) &&
-        (t.parentId === null || typeof t.parentId === "string") &&
-        (t.completedAt === null || timestamp(t.completedAt)) &&
-        timestamp(t.createdAt) &&
-        timestamp(t.updatedAt),
+          (validRecurrence(t.recurrence) && t.due_date !== null)) &&
+        (t.parent_id === null || typeof t.parent_id === "string") &&
+        (t.completed_at === null || timestamp(t.completed_at)) &&
+        timestamp(t.created_at) &&
+        timestamp(t.updated_at),
     )
   )
     throw new Error("Invalid tasks");
@@ -484,18 +500,18 @@ export function loadSnapshot(): Snapshot {
   if (byId.size !== tasks.length) throw new Error("Duplicate tasks");
   if (
     !(tasks as Task[]).every((t) => {
-      if (t.parentId === null) return true;
-      const parent = byId.get(t.parentId);
+      if (t.parent_id === null) return true;
+      const parent = byId.get(t.parent_id);
       return (
         !!parent &&
-        parent.parentId === null &&
+        parent.parent_id === null &&
         t.recurrence === null &&
-        t.projectId === parent.projectId
+        t.project_id === parent.project_id
       );
     })
   )
     throw new Error("Invalid subtasks");
-  return { version: 3, projects: data.projects, tasks } as Snapshot;
+  return { version: 4, projects: data.projects, tasks } as Snapshot;
 }
 
 export function saveSnapshot(snapshot: Snapshot) {

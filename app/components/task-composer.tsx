@@ -113,7 +113,7 @@ export function TaskComposer({
   const update = (value: Partial<TaskDraft>) =>
     setDraft((current) => ({ ...current, ...value }));
 
-  const isSubtask = draft.parentId !== null;
+  const isSubtask = draft.parent_id !== null;
   const canRepeat = !completed && !isSubtask;
   // Subtasks are one level deep, and a completed task's subtasks live in History.
   const showSubtasks = !isSubtask && !completed;
@@ -138,10 +138,10 @@ export function TaskComposer({
     (repeatToken && repeatStart) ||
     dateToken?.date ||
     (repeatToken ? localDate() : null) ||
-    draft.dueDate ||
+    draft.due_date ||
     (recurrence ? localDate() : null);
   const dueDate = rawDueDate && snapToRule(recurrence, rawDueDate);
-  const projectId = projectToken?.projectId ?? draft.projectId;
+  const projectId = projectToken?.projectId ?? draft.project_id;
   const priority = priorityToken?.priority ?? draft.priority;
   const longRepeat = recurrence
     ? recurrenceLabel(recurrence, dueDate, "sentence")
@@ -182,20 +182,20 @@ export function TaskComposer({
   const pickDate = (value: string | null) => {
     if (value === null) {
       if (recurrence) setAnnouncement("Date and repeat removed");
-      update({ dueDate: null, recurrence: null });
+      update({ due_date: null, recurrence: null });
       dismissTokens(dateToken, repeatToken);
       return;
     }
     // Picking a start date keeps a repeat rule; it only replaces a typed date.
     if (repeatToken) setRepeatStart(value);
-    else update({ dueDate: value });
+    else update({ due_date: value });
     dismissTokens(dateToken);
     const start = snapToRule(recurrence, value);
     if (start !== value) setAnnouncement(`Starts ${dayLabel(start)}`);
   };
   const pickRepeat = (rule: Recurrence | null) => {
     if (repeatToken) {
-      update({ recurrence: rule, dueDate });
+      update({ recurrence: rule, due_date: dueDate });
       dismissTokens(repeatToken);
     } else update({ recurrence: rule });
   };
@@ -250,9 +250,9 @@ export function TaskComposer({
           {
             ...draft,
             title,
-            dueDate,
+            due_date: dueDate,
             recurrence,
-            projectId,
+            project_id: projectId,
             priority,
             description: draft.description.trim(),
           },
@@ -571,7 +571,7 @@ export function TaskComposer({
               className={styles["composer-select"]}
               value={projectId ?? ""}
               onChange={(value) => {
-                update({ projectId: value || null });
+                update({ project_id: value || null });
                 dismissTokens(projectToken);
               }}
               icon={projectId ? <Hash size={15} aria-hidden="true" /> : <Inbox size={15} aria-hidden="true" />}
