@@ -83,12 +83,42 @@ const SIMPLE_REPEATS: Record<string, Recurrence> = {
   annually: { interval: 1, unit: "year" },
 };
 
+const NUMBER_WORDS: Record<string, number> = {
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+};
+// "wks", "mos" and "yrs" are the plural "s" on top of these.
+const UNIT_WORDS: Record<string, Recurrence["unit"]> = {
+  day: "day",
+  week: "week",
+  wk: "week",
+  month: "month",
+  mth: "month",
+  mo: "month",
+  year: "year",
+  yr: "year",
+};
+
 const alternation = (words: string[]) =>
   [...words].sort((a, b) => b.length - a.length).join("|");
 const WEEKDAY = alternation(Object.keys(WEEKDAY_WORDS));
 const DAY = `(?:${WEEKDAY})s?`;
 const MONTH = alternation(Object.keys(MONTHS));
 const ORDINAL = "(?:st|nd|rd|th)?";
+const NUMBER_WORD = alternation(Object.keys(NUMBER_WORDS));
+const UNIT = alternation(Object.keys(UNIT_WORDS));
+// A count of units ahead: "2", "two", or "a"/"an" for one.
+const AHEAD = `[1-9]\\d?|an?|${NUMBER_WORD}`;
 
 // A token must stand alone: not inside a word, a URL path, an email, a time or a contraction.
 const START = "(?<![\\p{L}\\p{N}_@#/.:'’-])";
@@ -98,12 +128,16 @@ const OPAQUE = /\b(?:https?:\/\/|www\.)\S+|[^\s@]+@[^\s@]+\.[^\s@]+/giu;
 const PRIORITY_PATTERN = "(?<priority>p[1-4])";
 const REPEAT_PATTERN = `(?<repeat>${[
   `(?<simple>${alternation(Object.keys(SIMPLE_REPEATS))})`,
-  "every\\s+(?:(?<other>other)\\s+|(?<count>\\d{1,2})\\s+)?(?<unit>day|week|month|year)s?",
+  `every\\s+(?:(?<other>other)\\s+|(?<count>\\d{1,2}|${NUMBER_WORD})\\s+)?(?<unit>${UNIT})s?`,
   "every\\s+(?<span>weekday|weekend)s?",
-  `every\\s+(?<days>${DAY}(?:\\s*(?:,\\s*(?:and\\s+)?|and\\s+|&\\s*)${DAY})*)`,
+  `every\\s+(?:(?<daysOther>other)\\s+)?(?<days>${DAY}(?:\\s*(?:,\\s*(?:and\\s+)?|and\\s+|&\\s*)${DAY})*)`,
 ].join("|")})`;
 const DATE_PATTERN = `(?<date>${[
-  "in\\s+(?<inN>[1-9]\\d?|an?)\\s+(?<inUnit>day|week|month|year)s?",
+  `in\\s+(?<inN>${AHEAD})\\s+(?<inUnit>${UNIT})s?`,
+  `(?<laterN>${AHEAD})\\s+(?<laterUnit>${UNIT})s?\\s+(?:later|from\\s+now)`,
+  "(?<dayAfter>(?:the\\s+)?day\\s+after\\s+(?:tomorrow|tmr))",
+  // Before the bare weekday, so "friday next week" isn't read as "friday".
+  `(?<weekOfDay>${WEEKDAY})\\s+next\\s+week`,
   "next\\s+(?<nextSpan>weekend|week|month)",
   `next\\s+(?<nextDay>${WEEKDAY})`,
   "this\\s+(?<weekend>weekend)",
@@ -180,12 +214,18 @@ function nextWeekdayFrom(today: string, day: number) {
 
 type Groups = Record<string, string | undefined>;
 
+function countOf(text: string) {
+  const word = text.toLowerCase();
+  if (word === "a" || word === "an") return 1;
+  return NUMBER_WORDS[word] ?? Number(word);
+}
+
 function repeatFromGroups(groups: Groups): Recurrence | null {
   if (groups.simple) return SIMPLE_REPEATS[groups.simple.toLowerCase()];
   if (groups.unit)
     return normalizeRecurrence({
-      interval: groups.other ? 2 : Number(groups.count ?? 1),
-      unit: groups.unit.toLowerCase() as Recurrence["unit"],
+      interval: groups.other ? 2 : countOf(groups.count ?? "1"),
+      unit: UNIT_WORDS[groups.unit.toLowerCase()],
     });
   if (groups.span)
     return {
@@ -195,7 +235,7 @@ function repeatFromGroups(groups: Groups): Recurrence | null {
     };
   if (groups.days)
     return normalizeRecurrence({
-      interval: 1,
+      interval: groups.daysOther ? 2 : 1,
       unit: "week",
       weekdays: groups.days
         .toLowerCase()
@@ -207,12 +247,19 @@ function repeatFromGroups(groups: Groups): Recurrence | null {
 }
 
 function dateFromGroups(groups: Groups, today: string, dayFirst: boolean): string | null {
-  if (groups.inUnit) {
-    const n = /^an?$/i.test(groups.inN!) ? 1 : Number(groups.inN);
-    const unit = groups.inUnit.toLowerCase();
+  const aheadUnit = groups.inUnit ?? groups.laterUnit;
+  if (aheadUnit) {
+    const n = countOf((groups.inN ?? groups.laterN)!);
+    const unit = UNIT_WORDS[aheadUnit.toLowerCase()];
     if (unit === "day") return addDays(today, n);
     if (unit === "week") return addDays(today, 7 * n);
     return addMonths(today, unit === "month" ? n : 12 * n);
+  }
+  if (groups.dayAfter) return addDays(today, 2);
+  if (groups.weekOfDay) {
+    // Weeks start on Monday, as in "next week", so "sunday next week" ends that week.
+    const monday = nextWeekdayFrom(today, 1);
+    return addDays(monday, (WEEKDAY_WORDS[groups.weekOfDay.toLowerCase()] + 6) % 7);
   }
   if (groups.nextSpan) {
     const span = groups.nextSpan.toLowerCase();
