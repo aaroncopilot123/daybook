@@ -22,6 +22,9 @@ export type Task = {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+  // Deleted tasks stay as tombstones, so a delete can be undone and synced. Only live tasks
+  // (`deleted_at` null) show anywhere or take part in any change.
+  deleted_at: string | null;
 };
 export type Project = { id: string; name: string };
 export type TaskDraft = Pick<
@@ -34,7 +37,7 @@ export type TaskDraft = Pick<
   | "recurrence"
   | "parent_id"
 >;
-export type Snapshot = { version: 5; tasks: Task[]; projects: Project[] };
+export type Snapshot = { version: 6; tasks: Task[]; projects: Project[] };
 export type View = "all" | "today" | "history" | "projects";
 
 function formatDate(date: Date) {
@@ -319,6 +322,8 @@ export function sequenceAt(rest: Task[], index: number) {
   return after - before > 1e-6 ? (before + after) / 2 : null;
 }
 
+export const isLive = (task: Task) => task.deleted_at === null;
+
 // Subtasks in their manual order.
 export function childrenOf(tasks: Task[], id: string) {
   return tasks.filter((task) => task.parent_id === id).sort(bySequence);
@@ -440,9 +445,10 @@ export function seedSnapshot(): Snapshot {
     completed_at: null,
     created_at: now,
     updated_at: now,
+    deleted_at: null,
   }));
   return {
-    version: 5,
+    version: 6,
     projects,
     tasks: [
       ...items.map(
@@ -459,6 +465,7 @@ export function seedSnapshot(): Snapshot {
         completed_at: done ? now : null,
         created_at: now,
         updated_at: now,
+        deleted_at: null,
       })),
       ...subtasks,
     ],
@@ -488,9 +495,12 @@ export function loadSnapshot(): Snapshot {
   return raw === null ? seedSnapshot() : parseSnapshot(raw);
 }
 
-// Reads saved data from any version, migrating it to the current one. Throws when it
-// isn't valid.
-export function parseSnapshot(raw: string): Snapshot {
+// How long a deleted task's tombstone stays in local storage.
+export const TOMBSTONE_DAYS = 30;
+
+// Reads saved data from any version, migrating it to the current one, and drops tombstones
+// older than TOMBSTONE_DAYS before `now`. Throws when the data isn't valid.
+export function parseSnapshot(raw: string, now = Date.now()): Snapshot {
   const data = JSON.parse(raw);
   const record = (value: unknown): value is Record<string, unknown> =>
     typeof value === "object" && value !== null;
@@ -498,22 +508,32 @@ export function parseSnapshot(raw: string): Snapshot {
     typeof value === "string" && Number.isFinite(Date.parse(value));
   if (
     !record(data) ||
-    ![1, 2, 3, 4, 5].includes(data.version as number) ||
+    ![1, 2, 3, 4, 5, 6].includes(data.version as number) ||
     !Array.isArray(data.projects) ||
     !Array.isArray(data.tasks)
   )
     throw new Error("Invalid saved data");
   // Version 1 predates recurring tasks; version 2 predates subtasks; version 3 used camelCase
-  // keys; version 4 predates the manual order.
+  // keys; version 4 predates the manual order; version 5 predates soft deletes.
   const version = data.version as number;
-  const tasks: unknown[] = data.tasks.map((t: unknown) =>
+  const migrated: unknown[] = data.tasks.map((t: unknown) =>
     !record(t)
       ? t
       : {
           ...(version < 4 ? snakeCaseKeys(t) : t),
           ...(version < 2 && { recurrence: null }),
           ...(version < 3 && { parent_id: null }),
+          ...(version < 6 && { deleted_at: null }),
         },
+  );
+  // Old tombstones go, along with any subtasks of a task that goes.
+  const expired = (t: unknown) =>
+    record(t) &&
+    typeof t.deleted_at === "string" &&
+    now - Date.parse(t.deleted_at) > TOMBSTONE_DAYS * 86_400_000;
+  const purged = new Set(migrated.filter(expired).map((t) => (t as Task).id));
+  const tasks = migrated.filter(
+    (t) => !expired(t) && !(record(t) && purged.has(t.parent_id as string)),
   );
   if (version < 5) {
     // Lists keep the creation order they had.
@@ -558,7 +578,8 @@ export function parseSnapshot(raw: string): Snapshot {
         Number.isFinite(t.sequence) &&
         (t.completed_at === null || timestamp(t.completed_at)) &&
         timestamp(t.created_at) &&
-        timestamp(t.updated_at),
+        timestamp(t.updated_at) &&
+        (t.deleted_at === null || timestamp(t.deleted_at)),
     )
   )
     throw new Error("Invalid tasks");
@@ -572,12 +593,14 @@ export function parseSnapshot(raw: string): Snapshot {
         !!parent &&
         parent.parent_id === null &&
         t.recurrence === null &&
-        t.project_id === parent.project_id
+        t.project_id === parent.project_id &&
+        // A live subtask has a live parent.
+        (!isLive(t) || isLive(parent))
       );
     })
   )
     throw new Error("Invalid subtasks");
-  return { version: 5, projects: data.projects, tasks } as Snapshot;
+  return { version: 6, projects: data.projects, tasks } as Snapshot;
 }
 
 export function saveSnapshot(snapshot: Snapshot) {

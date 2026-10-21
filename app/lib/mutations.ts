@@ -1,6 +1,7 @@
 import {
   addDays,
   daysBetween,
+  isLive,
   nextDueDate,
   nextSequence,
   scopeOf,
@@ -14,14 +15,14 @@ import {
 
 // Every change to the data is a pure function of the snapshot: it returns the rows it
 // changed, which the store applies with `applyChanges` and a backend can send as they are.
+// Tasks are never removed: deleting one sets `deleted_at`, and only live tasks take part.
 
 // What a mutation needs from outside: the current time, today's local date and new ids.
 export type Clock = { now: string; today: string; newId: () => string };
 
-// The rows a mutation inserted or changed, as they are after it, and the ids it removed.
+// The rows a mutation inserted or changed, as they are after it, and the projects it removed.
 export type Changes = {
   tasks: Task[];
-  removedTasks: string[];
   projects: Project[];
   removedProjects: string[];
 };
@@ -49,16 +50,26 @@ export type ScheduleUndo = {
   previous: Array<Pick<Task, "id" | "due_date" | "sequence">>;
 };
 
+// What deleteTask deleted, so the toast's Undo can bring it back.
+export type DeleteUndo = { ids: string[] };
+
 const changes = (part: Partial<Changes>): Changes => ({
   tasks: [],
-  removedTasks: [],
   projects: [],
   removedProjects: [],
   ...part,
 });
 
+const live = (snapshot: Snapshot) => snapshot.tasks.filter(isLive);
+
+const tombstone = (task: Task, now: string): Task => ({
+  ...task,
+  deleted_at: now,
+  updated_at: now,
+});
+
 // Updates rows by id, appends new ones in order, and drops removed ones.
-function upsert<T extends { id: string }>(rows: T[], changed: T[], removed: string[]) {
+function upsert<T extends { id: string }>(rows: T[], changed: T[], removed: string[] = []) {
   const byId = new Map(changed.map((row) => [row.id, row]));
   const gone = new Set(removed);
   const existing = new Set(rows.map((row) => row.id));
@@ -71,7 +82,7 @@ function upsert<T extends { id: string }>(rows: T[], changed: T[], removed: stri
 export function applyChanges(snapshot: Snapshot, change: Changes): Snapshot {
   return {
     ...snapshot,
-    tasks: upsert(snapshot.tasks, change.tasks, change.removedTasks),
+    tasks: upsert(snapshot.tasks, change.tasks),
     projects: upsert(snapshot.projects, change.projects, change.removedProjects),
   };
 }
@@ -80,12 +91,13 @@ export function applyChanges(snapshot: Snapshot, change: Changes): Snapshot {
 // missing ones are deleted, kept ones edited, new ones added, all in the list's order.
 // A new task goes at the end of its list. Returns what changed, for the toast.
 export function saveTask(
-  { tasks }: Snapshot,
+  snapshot: Snapshot,
   draft: TaskDraft,
   id: string | undefined,
   subtasks: SubtaskDraft[] | undefined,
   { now, newId }: Clock,
 ) {
+  const tasks = live(snapshot);
   const taskId = id ?? newId();
   const existing = tasks.filter((task) => task.parent_id === taskId);
   // Subtasks hang off a top-level task, share its project and never repeat.
@@ -155,6 +167,7 @@ export function saveTask(
       // A millisecond apart, so they keep the order they were typed in.
       created_at: new Date(Date.parse(now) + i + 1).toISOString(),
       updated_at: now,
+      deleted_at: null,
     }));
   const task = id ? tasks.find((item) => item.id === id) : undefined;
   return {
@@ -162,6 +175,7 @@ export function saveTask(
       tasks: [
         ...(task ? [{ ...task, ...fixed, updated_at: now }] : []),
         ...existing.flatMap((child) => {
+          if (removed.includes(child.id)) return [tombstone(child, now)];
           const edit = edits.get(child.id);
           return edit ? [{ ...child, ...edit, updated_at: now }] : [];
         }),
@@ -175,11 +189,11 @@ export function saveTask(
                 completed_at: null,
                 created_at: now,
                 updated_at: now,
+                deleted_at: null,
               },
             ]),
         ...added,
       ],
-      removedTasks: removed,
     }),
     id: taskId,
     moved,
@@ -194,7 +208,8 @@ export function saveTask(
 // occurrence and adds the next one, with its subtasks reset. Restoring a task brings back
 // the subtasks completed with it, and restoring a subtask reopens its parent. A restored
 // past occurrence becomes a one-off so the series never doubles up.
-export function toggleTask({ tasks }: Snapshot, id: string, { now, today, newId }: Clock) {
+export function toggleTask(snapshot: Snapshot, id: string, { now, today, newId }: Clock) {
+  const tasks = live(snapshot);
   const task = tasks.find((item) => item.id === id);
   if (!task) return null;
   const children = tasks.filter((item) => item.parent_id === id);
@@ -266,15 +281,17 @@ export function toggleTask({ tasks }: Snapshot, id: string, { now, today, newId 
   };
 }
 
-export function undoToggle({ tasks }: Snapshot, undo: ToggleUndo, { now }: Clock) {
+// Puts the toggled tasks back and deletes the next occurrence it added.
+export function undoToggle(snapshot: Snapshot, undo: ToggleUndo, { now }: Clock) {
   const previous = new Map(undo.previous.map((item) => [item.id, item]));
+  const spawned = new Set(undo.spawned ? [undo.spawned.id, ...undo.spawned.childIds] : []);
   return {
     changes: changes({
-      tasks: tasks.flatMap((task) => {
+      tasks: live(snapshot).flatMap((task) => {
+        if (spawned.has(task.id)) return [tombstone(task, now)];
         const before = previous.get(task.id);
         return before ? [{ ...task, ...before, updated_at: now }] : [];
       }),
-      removedTasks: undo.spawned ? [undo.spawned.id, ...undo.spawned.childIds] : [],
     }),
   };
 }
@@ -308,7 +325,8 @@ function place(tasks: Task[], task: Task, order: string[]) {
 
 // Moves a task within the list it's shown in. `order` is that list's ids after the move.
 // Returns its new position among the shown tasks.
-export function moveTask({ tasks }: Snapshot, id: string, order: string[], { now }: Clock) {
+export function moveTask(snapshot: Snapshot, id: string, order: string[], { now }: Clock) {
+  const tasks = live(snapshot);
   const task = tasks.find((item) => item.id === id);
   if (!task) return null;
   const { position, sequences } = place(tasks, task, order);
@@ -329,12 +347,13 @@ export function moveTask({ tasks }: Snapshot, id: string, order: string[], { now
 // list's ids with the task in its new place. Only the task's own date changes; a recurring
 // task's series continues from the new date, and its subtasks keep their dates.
 export function rescheduleTask(
-  { tasks }: Snapshot,
+  snapshot: Snapshot,
   id: string,
   dueDate: string,
   order: string[],
   { now }: Clock,
 ) {
+  const tasks = live(snapshot);
   const task = tasks.find((item) => item.id === id);
   if (!task || task.due_date === dueDate) return null;
   const { position, sequences } = place(tasks, task, order);
@@ -360,11 +379,11 @@ export function rescheduleTask(
   };
 }
 
-export function undoReschedule({ tasks }: Snapshot, undo: ScheduleUndo, { now }: Clock) {
+export function undoReschedule(snapshot: Snapshot, undo: ScheduleUndo, { now }: Clock) {
   const previous = new Map(undo.previous.map((item) => [item.id, item]));
   return {
     changes: changes({
-      tasks: tasks.flatMap((task) => {
+      tasks: live(snapshot).flatMap((task) => {
         const before = previous.get(task.id);
         return before ? [{ ...task, ...before, updated_at: now }] : [];
       }),
@@ -372,13 +391,24 @@ export function undoReschedule({ tasks }: Snapshot, undo: ScheduleUndo, { now }:
   };
 }
 
-// Deleting a task deletes its subtasks.
-export function deleteTask({ tasks }: Snapshot, id: string) {
+// Deleting a task deletes its subtasks with it, and Undo brings back the same set.
+export function deleteTask(snapshot: Snapshot, id: string, { now }: Clock) {
+  const deleted = live(snapshot).filter((task) => task.id === id || task.parent_id === id);
+  if (!deleted.some((task) => task.id === id)) return null;
+  const undo: DeleteUndo = { ids: deleted.map((task) => task.id) };
+  return { changes: changes({ tasks: deleted.map((task) => tombstone(task, now)) }), undo };
+}
+
+export function undoDelete(snapshot: Snapshot, undo: DeleteUndo, { now }: Clock) {
+  const ids = new Set(undo.ids);
+  const restored = snapshot.tasks.filter((task) => ids.has(task.id) && !isLive(task));
+  const liveIds = new Set([...live(snapshot), ...restored].map((task) => task.id));
   return {
     changes: changes({
-      removedTasks: tasks
-        .filter((task) => task.id === id || task.parent_id === id)
-        .map((task) => task.id),
+      tasks: restored
+        // A subtask only comes back with its parent.
+        .filter((task) => task.parent_id === null || liveIds.has(task.parent_id))
+        .map((task) => ({ ...task, deleted_at: null, updated_at: now })),
     }),
   };
 }
@@ -397,7 +427,8 @@ export function saveProject(
   };
 }
 
-// Deleting a project keeps its tasks, without a project.
+// Deleting a project keeps its tasks, without a project. Deleted tasks let go of it too, so
+// an Undo can't bring back a task in a missing project.
 export function deleteProject({ tasks }: Snapshot, id: string, { now }: Clock) {
   return {
     changes: changes({

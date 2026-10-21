@@ -8,6 +8,7 @@ import {
   saveProject,
   saveTask,
   toggleTask,
+  undoDelete,
   undoReschedule,
   undoToggle,
   type Changes,
@@ -38,12 +39,13 @@ function task(id: string, fields: Partial<Task> = {}): Task {
     completed_at: null,
     created_at: EARLIER,
     updated_at: EARLIER,
+    deleted_at: null,
     ...fields,
   };
 }
 
 const snapshot = (tasks: Task[], projects: Project[] = []): Snapshot => ({
-  version: 5,
+  version: 6,
   tasks,
   projects,
 });
@@ -60,23 +62,24 @@ const draft = (fields: Partial<TaskDraft> = {}): TaskDraft => ({
 });
 
 const find = (data: Snapshot, id: string) => data.tasks.find((item) => item.id === id)!;
+const liveIds = (data: Snapshot) =>
+  data.tasks.filter((item) => item.deleted_at === null).map((item) => item.id);
 const changedIds = (changes: Changes) => changes.tasks.map((item) => item.id);
 const order = (data: Snapshot, parentId: string | null = null) =>
   data.tasks
-    .filter((item) => item.parent_id === parentId)
+    .filter((item) => item.parent_id === parentId && item.deleted_at === null)
     .sort(bySequence)
     .map((item) => item.id);
 
 describe("applyChanges", () => {
-  it("updates rows in place, appends new ones and drops removed ones", () => {
+  it("updates rows in place, appends new ones and drops removed projects", () => {
     const data = snapshot([task("a"), task("b"), task("c")], [{ id: "p", name: "P" }]);
     const next = applyChanges(data, {
       tasks: [task("b", { title: "B!" }), task("d")],
-      removedTasks: ["c"],
       projects: [{ id: "q", name: "Q" }],
       removedProjects: ["p"],
     });
-    expect(next.tasks.map((item) => item.id)).toEqual(["a", "b", "d"]);
+    expect(next.tasks.map((item) => item.id)).toEqual(["a", "b", "c", "d"]);
     expect(find(next, "b").title).toBe("B!");
     expect(next.projects).toEqual([{ id: "q", name: "Q" }]);
     expect(data.tasks).toHaveLength(3);
@@ -179,7 +182,7 @@ describe("toggleTask", () => {
     expect(find(next, "step").completed_at).toBe(NOW);
   });
 
-  it("undoing a recurring completion removes the next occurrence", () => {
+  it("undoing a recurring completion deletes the next occurrence", () => {
     const data = snapshot([
       task("weekly", { due_date: TODAY, recurrence: { interval: 1, unit: "week" } }),
       task("step", { parent_id: "weekly" }),
@@ -187,7 +190,9 @@ describe("toggleTask", () => {
     const { changes, undo } = toggleTask(data, "weekly", clock())!;
     const done = applyChanges(data, changes);
     const back = applyChanges(done, undoToggle(done, undo, clock()).changes);
-    expect(back.tasks.map((item) => item.id)).toEqual(["weekly", "step"]);
+    expect(liveIds(back)).toEqual(["weekly", "step"]);
+    expect(find(back, "new-1").deleted_at).toBe(NOW);
+    expect(find(back, "new-2").deleted_at).toBe(NOW);
     expect(find(back, "weekly").completed_at).toBeNull();
   });
 });
@@ -363,27 +368,86 @@ describe("saveTask", () => {
       completed_at: NOW,
       sequence: 2,
     });
-    expect(next.tasks.some((item) => item.id === "two")).toBe(false);
+    // Removed subtasks become tombstones.
+    expect(find(next, "two").deleted_at).toBe(NOW);
+    expect(liveIds(next)).not.toContain("two");
     expect(find(next, "p").project_id).toBe("work");
   });
 
   it("leaves the subtasks alone without a list", () => {
     const data = snapshot([task("p"), task("s", { parent_id: "p" })]);
     const saved = saveTask(data, draft({ title: "Renamed" }), "p", undefined, clock());
-    expect(saved.changes.removedTasks).toEqual([]);
     expect(changedIds(saved.changes)).toEqual(["p"]);
   });
 });
 
 describe("deleting", () => {
-  it("deleting a task deletes its subtasks only", () => {
-    const data = snapshot([task("p"), task("s", { parent_id: "p" }), task("q")]);
-    expect(deleteTask(data, "p").changes.removedTasks).toEqual(["p", "s"]);
+  it("deleting a task deletes it and its live subtasks, keeping them as tombstones", () => {
+    const data = snapshot([
+      task("p"),
+      task("s", { parent_id: "p" }),
+      task("gone", { parent_id: "p", deleted_at: EARLIER }),
+      task("q"),
+    ]);
+    const { changes, undo } = deleteTask(data, "p", clock())!;
+    expect(undo).toEqual({ ids: ["p", "s"] });
+    const next = applyChanges(data, changes);
+    expect(next.tasks).toHaveLength(4);
+    expect(liveIds(next)).toEqual(["q"]);
+    expect(find(next, "s")).toMatchObject({ deleted_at: NOW, updated_at: NOW });
+    expect(find(next, "gone").deleted_at).toBe(EARLIER);
+  });
+
+  it("returns null for a task that's already deleted", () => {
+    const data = snapshot([task("a", { deleted_at: EARLIER })]);
+    expect(deleteTask(data, "a", clock())).toBeNull();
+    expect(deleteTask(data, "missing", clock())).toBeNull();
+  });
+
+  it("undo brings back exactly what was deleted", () => {
+    const data = snapshot([
+      task("p"),
+      task("s", { parent_id: "p" }),
+      task("gone", { parent_id: "p", deleted_at: EARLIER }),
+    ]);
+    const { changes, undo } = deleteTask(data, "p", clock())!;
+    const deleted = applyChanges(data, changes);
+    const back = applyChanges(deleted, undoDelete(deleted, undo, clock()).changes);
+    expect(liveIds(back)).toEqual(["p", "s"]);
+    expect(find(back, "gone").deleted_at).toBe(EARLIER);
+  });
+
+  it("undo doesn't bring back a subtask whose parent is deleted", () => {
+    const data = snapshot([
+      task("p", { deleted_at: NOW }),
+      task("s", { parent_id: "p", deleted_at: EARLIER }),
+    ]);
+    expect(undoDelete(data, { ids: ["s"] }, clock()).changes.tasks).toEqual([]);
+  });
+
+  it("deleted tasks take no part in ordering or cascades", () => {
+    const data = snapshot([
+      task("a", { sequence: 1 }),
+      task("dead", { sequence: 9, deleted_at: EARLIER }),
+      task("p", { sequence: 2 }),
+      task("dead-child", { parent_id: "p", deleted_at: EARLIER }),
+    ]);
+    const saved = saveTask(data, draft(), undefined, undefined, clock());
+    expect(saved.changes.tasks[0].sequence).toBe(3);
+    const toggled = toggleTask(data, "p", clock())!;
+    expect(changedIds(toggled.changes)).toEqual(["p"]);
+    expect(moveTask(data, "dead", ["dead", "a"], clock())).toBeNull();
+    const moved = moveTask(data, "p", ["p", "a"], clock())!;
+    expect(moved.changes.tasks[0].sequence).toBe(0);
   });
 
   it("deleting a project keeps its tasks, without a project", () => {
     const data = snapshot(
-      [task("a", { project_id: "work" }), task("b", { project_id: "home" })],
+      [
+        task("a", { project_id: "work" }),
+        task("b", { project_id: "home" }),
+        task("dead", { project_id: "work", deleted_at: EARLIER }),
+      ],
       [
         { id: "work", name: "Work" },
         { id: "home", name: "Home" },
@@ -393,7 +457,8 @@ describe("deleting", () => {
     const next = applyChanges(data, changes);
     expect(next.projects).toEqual([{ id: "home", name: "Home" }]);
     expect(find(next, "a").project_id).toBeNull();
-    expect(changedIds(changes)).toEqual(["a"]);
+    // Tombstones let go of it too, so an Undo can't restore a task into a missing project.
+    expect(changedIds(changes)).toEqual(["a", "dead"]);
   });
 });
 

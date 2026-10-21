@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  isLive,
   loadSnapshot,
   localDate,
   saveSnapshot,
@@ -11,9 +12,9 @@ import {
   type TaskDraft,
 } from "./tasks";
 import * as mutations from "./mutations";
-import type { Changes, Clock, ScheduleUndo, ToggleUndo } from "./mutations";
+import type { Changes, Clock, DeleteUndo, ScheduleUndo, ToggleUndo } from "./mutations";
 
-const emptySnapshot: Snapshot = { version: 5, tasks: [], projects: [] };
+const emptySnapshot: Snapshot = { version: 6, tasks: [], projects: [] };
 
 const clock = (): Clock => ({ now: new Date().toISOString(), today: localDate(), newId });
 
@@ -23,6 +24,8 @@ export function useTasks() {
   const [storageError, setStorageError] = useState("");
   const currentData = useRef(data);
   const canSave = useRef(false);
+  // Deleted tasks stay in the snapshot as tombstones; the app only sees live ones.
+  const tasks = useMemo(() => data.tasks.filter(isLive), [data.tasks]);
 
   useEffect(() => {
     let cancelled = false;
@@ -110,8 +113,15 @@ export function useTasks() {
     commit(mutations.undoReschedule(currentData.current, undo, clock()).changes);
   }
 
-  function deleteTask(id: string) {
-    commit(mutations.deleteTask(currentData.current, id).changes);
+  function deleteTask(id: string): DeleteUndo | null {
+    const deleted = mutations.deleteTask(currentData.current, id, clock());
+    if (!deleted) return null;
+    commit(deleted.changes);
+    return deleted.undo;
+  }
+
+  function undoDelete(undo: DeleteUndo) {
+    commit(mutations.undoDelete(currentData.current, undo, clock()).changes);
   }
 
   function saveProject(name: string, id?: string) {
@@ -126,6 +136,7 @@ export function useTasks() {
 
   return {
     ...data,
+    tasks,
     ready,
     storageError,
     saveTask,
@@ -135,6 +146,7 @@ export function useTasks() {
     rescheduleTask,
     undoReschedule,
     deleteTask,
+    undoDelete,
     saveProject,
     deleteProject,
   };

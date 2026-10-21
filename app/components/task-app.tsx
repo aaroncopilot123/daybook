@@ -589,7 +589,8 @@ export default function TaskApp() {
           ? `“${task.title}” will be deleted and stop repeating. Past completions stay in History.`
           : `“${task.title}” will be permanently deleted.`,
       action: () => {
-        store.deleteTask(task.id);
+        const deleted = store.deleteTask(task.id);
+        if (!deleted) return;
         setNotice(
           task.parent_id
             ? "Subtask deleted"
@@ -597,6 +598,12 @@ export default function TaskApp() {
               ? `Task and ${subtasks(children)} deleted`
               : "Task deleted",
         );
+        setUndo({
+          run: () => {
+            store.undoDelete(deleted);
+            return "Delete undone";
+          },
+        });
       },
     });
   }

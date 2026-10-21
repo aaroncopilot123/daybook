@@ -25,6 +25,7 @@ function task(id: string, fields: Partial<Task> = {}): Task {
     completed_at: null,
     created_at: EARLIER,
     updated_at: EARLIER,
+    deleted_at: null,
     ...fields,
   };
 }
@@ -163,7 +164,7 @@ describe("parseSnapshot", () => {
         [{ id: "work", name: "Work" }],
       ),
     );
-    expect(data.version).toBe(5);
+    expect(data.version).toBe(6);
     expect(data.tasks[0]).toEqual(
       task("b", {
         title: "B",
@@ -198,9 +199,31 @@ describe("parseSnapshot", () => {
     ]);
   });
 
-  it("keeps version 5 data as it is", () => {
+  it("adds soft deletes to version 5 data", () => {
     const tasks = [task("a", { sequence: 7 }), task("b", { sequence: 0.5 })];
-    expect(parseSnapshot(saved(5, tasks)).tasks).toEqual(tasks);
+    const v5 = tasks.map((item) => ({ ...item, deleted_at: undefined }));
+    expect(parseSnapshot(saved(5, v5)).tasks).toEqual(tasks);
+  });
+
+  it("keeps version 6 data as it is, tombstones included", () => {
+    const tasks = [task("a", { sequence: 7 }), task("b", { deleted_at: EARLIER })];
+    const now = Date.parse("2026-10-20T00:00:00.000Z");
+    expect(parseSnapshot(saved(6, tasks), now).tasks).toEqual(tasks);
+  });
+
+  it("drops tombstones older than 30 days, with their subtasks", () => {
+    const old = "2026-09-01T00:00:00.000Z";
+    const tasks = [
+      task("old", { deleted_at: old }),
+      task("old-child", { parent_id: "old", deleted_at: old }),
+      task("recent", { deleted_at: EARLIER }),
+      task("alive"),
+    ];
+    const now = Date.parse("2026-10-20T00:00:00.000Z");
+    expect(parseSnapshot(saved(6, tasks), now).tasks.map((item) => item.id)).toEqual([
+      "recent",
+      "alive",
+    ]);
   });
 
   it.each([
@@ -213,6 +236,11 @@ describe("parseSnapshot", () => {
       saved(5, [task("a"), task("b", { parent_id: "a" }), task("c", { parent_id: "b" })]),
     ],
     ["a missing sequence", saved(5, [{ ...task("a"), sequence: null }])],
+    ["a bad deleted_at", saved(6, [task("a", { deleted_at: "soon" })])],
+    [
+      "a live subtask of a deleted task",
+      saved(6, [task("a", { deleted_at: EARLIER }), task("b", { parent_id: "a" })]),
+    ],
   ])("rejects %s", (_, raw) => {
     expect(() => parseSnapshot(raw)).toThrow();
   });
