@@ -485,7 +485,12 @@ export const STORAGE_KEY = "daybook.tasks.v1";
 
 export function loadSnapshot(): Snapshot {
   const raw = localStorage.getItem(STORAGE_KEY);
-  if (raw === null) return seedSnapshot();
+  return raw === null ? seedSnapshot() : parseSnapshot(raw);
+}
+
+// Reads saved data from any version, migrating it to the current one. Throws when it
+// isn't valid.
+export function parseSnapshot(raw: string): Snapshot {
   const data = JSON.parse(raw);
   const record = (value: unknown): value is Record<string, unknown> =>
     typeof value === "object" && value !== null;

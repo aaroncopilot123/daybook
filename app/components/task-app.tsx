@@ -47,7 +47,8 @@ import {
   type TaskDraft,
   type View,
 } from "../lib/tasks";
-import { useTasks, type ToggleUndo } from "../lib/use-tasks";
+import { useTasks } from "../lib/use-tasks";
+import type { ToggleUndo } from "../lib/mutations";
 import { animateAcross, animateReorder, useDragReorder } from "../lib/use-drag-reorder";
 import { matchesSearch, searchTerms } from "../lib/search";
 import { TaskSearch } from "./task-search";
