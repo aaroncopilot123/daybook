@@ -410,15 +410,23 @@
   background: var(--raised);
   color: var(--secondary);
   box-shadow: 0 6px 25px var(--popover-shadow);
+  /* Faint at rest, so it doesn't compete with the rows it floats over. */
+  opacity: 0.6;
   animation: back-to-top-in 150ms var(--ease);
   transition:
     opacity 150ms var(--ease),
     color 150ms var(--ease),
     border-color 150ms var(--ease);
 }
-:global(.icon-button).back-to-top:hover {
-  color: var(--accent-text);
-  border-color: var(--selected-border);
+:global(.icon-button).back-to-top:focus-visible {
+  opacity: 1;
+}
+@media (hover: hover) {
+  :global(.icon-button).back-to-top:hover {
+    opacity: 1;
+    color: var(--accent-text);
+    border-color: var(--selected-border);
+  }
 }
 /* Out of the way of a dragged row. */
 .app-shell.is-dragging .back-to-top {
