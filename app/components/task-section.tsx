@@ -12,8 +12,6 @@ export function TaskSection({
   onToggle,
   date,
   overdue = false,
-  zone,
-  sourceOnly = false,
   emptyText = "No tasks due today. A little room to breathe.",
   summaryNoun = overdue ? "overdue" : "due today",
   children,
@@ -24,9 +22,6 @@ export function TaskSection({
   onToggle: () => void;
   date?: string;
   overdue?: boolean;
-  // Its key as a drag-and-drop zone, and whether tasks can only be dragged out of it.
-  zone?: string;
-  sourceOnly?: boolean;
   // What an empty section says, and what its collapsed summary calls its tasks ("3 overdue").
   emptyText?: string;
   summaryNoun?: string;
@@ -38,9 +33,6 @@ export function TaskSection({
   return (
     <section
       className={`${styles["task-section"]} ${styles["collapsible-section"]} ${overdue ? styles["overdue-section"] : ""}`}
-      data-sort-zone={zone}
-      data-sort-label={zone ? title : undefined}
-      data-sort-source-only={sourceOnly ? "" : undefined}
     >
       <h2 className={`${styles["section-heading"]} ${overdue ? styles["overdue-heading"] : ""}`}>
         <button

@@ -155,60 +155,6 @@
 .subtask-note.done {
   color: var(--muted);
 }
-/* Reordering: a grip in the composer's left padding, for mouse and trackpad. */
-.subtask-grip {
-  position: absolute;
-  right: 100%;
-  top: 0;
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 34px;
-  color: var(--decoration);
-  cursor: grab;
-  opacity: 0;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-  transition:
-    opacity 100ms var(--ease),
-    color 150ms var(--ease);
-}
-.subtask-grip:hover {
-  color: var(--secondary);
-}
-.subtask-item:hover > .subtask-grip,
-.subtask-item[data-dragging] > .subtask-grip {
-  opacity: 1;
-}
-@media (hover: none), (pointer: coarse) {
-  .subtask-grip {
-    display: none;
-  }
-}
-[data-sorting] > .subtask-item {
-  transform: translateY(var(--shift-y, 0px));
-  transition:
-    background-color 150ms var(--ease),
-    transform 150ms var(--ease-reposition);
-}
-[data-sorting] > .subtask-item[data-dragging] {
-  z-index: 1;
-  transform: translateY(var(--drag-y, 0px));
-  transition: none;
-  background: var(--drag-background);
-  box-shadow:
-    0 0 0 1px var(--selected-border),
-    var(--drag-shadow);
-  cursor: grabbing;
-}
-[data-settling] > .subtask-item[data-dragging] {
-  transition: transform 150ms var(--ease-reposition);
-}
-.subtask-item[data-dragging] > .subtask-grip {
-  color: var(--accent-text);
-  cursor: grabbing;
-}
 .subtask-plus {
   display: grid;
   place-items: center;

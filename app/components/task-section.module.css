@@ -138,7 +138,7 @@
 .day-section + .day-section {
   margin-top: 26px;
 }
-/* An empty day is just its heading, a quiet place to drop a task. */
+/* An empty day is just its heading, a quiet place to plan into. */
 .empty-day + .empty-day {
   margin-top: 6px;
 }
@@ -152,8 +152,8 @@
 .end-of-tasks {
   margin: 32px 0 26px;
   text-align: center;
-  font-size: 11px;
-  color: var(--muted);
+  font-size: 12px;
+  color: var(--secondary);
   overflow-wrap: anywhere;
 }
 .end-of-tasks > p {
@@ -164,9 +164,9 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 510;
-  color: var(--secondary);
+  color: var(--end-marker-text);
 }
 .end-of-tasks > p:first-child::before,
 .end-of-tasks > p:first-child::after {
@@ -174,7 +174,7 @@
   flex: 1;
   min-width: 24px;
   height: 1px;
-  background: var(--border);
+  background: var(--end-marker-rule);
 }
 .end-of-tasks > p + p {
   margin-top: 6px;
@@ -182,52 +182,7 @@
 .end-of-tasks + .month-heading {
   margin-top: 0;
 }
-/* Drop zones while a task is dragged over them. The highlight and the end-of-list line are
-   drawn outside the layout, so nothing moves under the pointer. */
-.task-section[data-sort-zone],
-.day-section {
-  position: relative;
-  border-radius: 8px;
-  transition:
-    background-color 150ms ease,
-    box-shadow 150ms ease;
-}
-.task-section[data-sort-zone][data-drop-target],
-.day-section[data-drop-target] {
-  background: var(--accent-subtle);
-  box-shadow: 0 0 0 6px var(--accent-subtle);
-}
-.task-section[data-sort-zone][data-drop-target] .section-heading,
-.day-section[data-drop-target] .section-heading {
-  color: var(--accent-text);
-}
-.task-section[data-sort-zone][data-drop-end]::after,
-.day-section[data-drop-end]::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -4px;
-  height: 2px;
-  border-radius: 1px;
-  background: var(--accent);
-}
-@media (prefers-reduced-motion: reduce) {
-  .task-section[data-sort-zone],
-  .day-section {
-    transition: none;
-  }
-}
 @media (forced-colors: active) {
-  .task-section[data-sort-zone][data-drop-target],
-  .day-section[data-drop-target] {
-    outline: 2px solid Highlight;
-    outline-offset: 4px;
-  }
-  .task-section[data-sort-zone][data-drop-end]::after,
-  .day-section[data-drop-end]::after {
-    background: Highlight;
-  }
   .end-of-tasks > p:first-child::before,
   .end-of-tasks > p:first-child::after {
     background: GrayText;

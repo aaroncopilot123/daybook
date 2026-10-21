@@ -10,7 +10,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { flushSync } from "react-dom";
 import {
   ArrowDown,
   ArrowUp,
@@ -33,10 +32,9 @@ import {
   addDays,
   dateLabel,
   dayInSentence,
-  dayLabel,
   localDate,
+  byCreated,
   childrenOf,
-  manualOrder,
   matchesView,
   nestTasks,
   subtaskProgress,
@@ -49,7 +47,6 @@ import {
 } from "../lib/tasks";
 import { useTasks } from "../lib/use-tasks";
 import type { ToggleUndo } from "../lib/mutations";
-import { animateAcross, animateReorder, useDragReorder } from "../lib/use-drag-reorder";
 import { matchesSearch, searchTerms } from "../lib/search";
 import { TaskSearch } from "./task-search";
 import { Sidebar } from "./sidebar";
@@ -73,9 +70,6 @@ type Composer = {
 const subtasks = (count: number) => `${count} ${count === 1 ? "subtask" : "subtasks"}`;
 
 type Confirmation = { title: string; message: string; action: () => void };
-// A list that can be reordered: its sortable task ids in order, its name for announcements,
-// and, for a list of tasks due on one day, its drop zone: "today", "overdue" or the date.
-type SortList = { ids: string[]; label?: string; zone?: string };
 // The toast's Undo: puts the change back and returns the toast that confirms it.
 type Undo = { run: () => string };
 // All tasks loads this many days at a time as it scrolls.
@@ -99,18 +93,6 @@ export default function TaskApp() {
   const [projectsExpanded, setProjectsExpanded] = useState(true);
   const reopenNavigation = useRef<HTMLButtonElement>(null);
   const desktopNavigation = useRef<HTMLElement>(null);
-  const topbar = useRef<HTMLElement>(null);
-  // Dragging rows scrolls the page when the pointer nears the sticky top bar.
-  const drag = useDragReorder({
-    topInset: () => topbar.current?.getBoundingClientRect().bottom ?? 0,
-  });
-  // Screen reader announcements that don't need a toast.
-  const [announcement, setAnnouncement] = useState("");
-  useEffect(() => {
-    if (!announcement) return;
-    const timer = window.setTimeout(() => setAnnouncement(""), 1000);
-    return () => window.clearTimeout(timer);
-  }, [announcement]);
 
   useEffect(() => {
     if (!sidebarOpen) reopenNavigation.current?.focus({ preventScroll: true });
@@ -281,7 +263,6 @@ export default function TaskApp() {
     history: History,
     projects: Layers2,
   }[view];
-  const manual = manualOrder(store.tasks);
   const visibleTasks = store.tasks
     .filter(
       (task) =>
@@ -293,18 +274,9 @@ export default function TaskApp() {
         ? b.completed_at!.localeCompare(a.completed_at!) ||
           b.created_at.localeCompare(a.created_at)
         : prioritySort
-          ? (a.priority ?? 5) - (b.priority ?? 5) || manual(a, b)
-          : manual(a, b),
+          ? (a.priority ?? 5) - (b.priority ?? 5) || byCreated(a, b)
+          : byCreated(a, b),
     );
-  // Why the shown order can't change right now, if it can't.
-  const reorderBlock =
-    view === "history"
-      ? "History is ordered by completion date."
-      : prioritySort
-        ? "Turn off Sort by priority to reorder tasks."
-        : searching
-          ? "Clear the search to reorder tasks."
-          : null;
   // Parents shown anywhere in the view carry their subtasks; see nestTasks.
   const shownParents = new Set(
     visibleTasks.filter((task) => task.parent_id === null).map((task) => task.id),
@@ -347,24 +319,6 @@ export default function TaskApp() {
   // The last of those days with a task. Empty days keep loading after it as places to plan
   // into, so All tasks marks where its tasks end.
   const lastTaskDay = shownDays.findLast((date) => tasksByDate.has(date));
-  // The tasks in a drop zone, the date a task dropped there becomes due (Overdue makes it due
-  // yesterday), and the zone's name.
-  const zoneTasks = (zone: string) =>
-    zone === "today"
-      ? dueTodayTasks
-      : zone === "overdue"
-        ? overdueTasks
-        : (tasksByDate.get(zone) ?? []);
-  const zoneDate = (zone: string) =>
-    zone === "today" ? today : zone === "overdue" ? addDays(today, -1) : zone;
-  const zoneName = (zone: string) => (zone === "overdue" ? "Overdue" : dayLabel(zoneDate(zone)));
-  // The drop zones in page order. A move one place past the end of a list goes to the next.
-  const zoneOrder =
-    view === "today" ? ["today", "overdue"] : view === "all" ? ["overdue", "today", ...shownDays] : [];
-  function neighbourZone(zone: string, step: -1 | 1) {
-    const index = zoneOrder.indexOf(zone);
-    return index < 0 ? null : (zoneOrder[index + step] ?? null);
-  }
   const todayTasks = store.tasks.filter(
     (task) =>
       task.due_date === today &&
@@ -618,110 +572,16 @@ export default function TaskApp() {
       },
     });
   }
-  function announceMove(
-    task: Task,
-    moved: { position: number; total: number } | null,
-    list: SortList,
-  ) {
-    if (moved)
-      setAnnouncement(
-        `Moved “${task.title}” to position ${moved.position} of ${moved.total}${list.label ? ` in ${list.label}` : ""}.`,
-      );
-  }
-  // The sortable ids a zone's list shows, in order.
-  const zoneIds = (zone: string) =>
-    nestTasks(zoneTasks(zone), store.tasks, shownParents)
-      .filter((entry) => entry.task.parent_id === null)
-      .map((entry) => entry.task.id);
-  // Moves a task into another day's list. `order` is that list's ids with the task in its
-  // new place; a list that isn't shown, like a collapsed section, takes it at the end.
-  function reschedule(task: Task, zone: string, order: string[]) {
-    const date = zoneDate(zone);
-    const ids = order.some((id) => id !== task.id) ? order : [...zoneIds(zone), task.id];
-    const moved = store.rescheduleTask(task.id, date, ids);
-    if (!moved) return;
-    setNotice(
-      zone === "overdue"
-        ? `Moved to Overdue, due ${dayInSentence(date)}`
-        : `Moved to ${dayInSentence(date)}`,
-    );
-    setUndo({
-      run: () => {
-        store.undoReschedule(moved);
-        return "Move undone";
-      },
-    });
-  }
-  // One place up or down, from the keyboard shortcut or the row menu. Past either end of a
-  // day's list, the task moves into the neighbouring day's.
-  function moveTask(task: Task, step: -1 | 1, from: "key" | "menu", list: SortList) {
-    const index = list.ids.indexOf(task.id);
-    if (reorderBlock || index < 0) {
-      setNotice(reorderBlock ?? "Reorder this subtask from its parent task.");
-      return;
-    }
-    const target = index + step;
-    const next = list.zone && neighbourZone(list.zone, step);
-    if ((target < 0 || target >= list.ids.length) && next) {
-      moveAcross(task, next, step, from);
-      return;
-    }
-    if (target < 0 || target >= list.ids.length) {
-      setAnnouncement(`“${task.title}” is already ${step < 0 ? "first" : "last"}.`);
-      return;
-    }
-    const order = list.ids.filter((id) => id !== task.id);
-    order.splice(target, 0, task.id);
-    const row = document.querySelector<HTMLElement>(`[data-task-id="${CSS.escape(task.id)}"]`);
-    const focused = document.activeElement;
-    let moved: { position: number; total: number } | null = null;
-    animateReorder(row?.parentElement, () =>
-      flushSync(() => {
-        moved = store.moveTask(task.id, order);
-      }),
-    );
-    announceMove(task, moved, list);
-    // Moving the row can drop focus; keep it where it was, or on the menu to move again.
-    const control = from === "menu" ? row?.querySelector("summary") : focused;
-    if (control instanceof HTMLElement) control.focus({ preventScroll: true });
-    row?.scrollIntoView({ block: "nearest" });
-  }
-  // Moves a task to the near end of the neighbouring day's list: the top when moving down,
-  // the bottom when moving up.
-  function moveAcross(task: Task, zone: string, step: -1 | 1, from: "key" | "menu") {
-    const selector = `[data-task-id="${CSS.escape(task.id)}"]`;
-    const row = document.querySelector<HTMLElement>(selector);
-    const group = row?.closest("[data-sort-group]");
-    if (!row || !group) return;
-    // The row remounts in its new list, so find the focused control again by its place.
-    const controls = (element: Element) => [...element.querySelectorAll("button, summary")];
-    const focusedAt = controls(row).indexOf(document.activeElement as Element);
-    const ids = zoneIds(zone).filter((id) => id !== task.id);
-    animateAcross(group, () =>
-      flushSync(() => reschedule(task, zone, step > 0 ? [task.id, ...ids] : [...ids, task.id])),
-    );
-    const moved = document.querySelector<HTMLElement>(selector);
-    const control =
-      from === "menu" ? moved?.querySelector("summary") : moved && controls(moved)[focusedAt];
-    if (control instanceof HTMLElement) control.focus({ preventScroll: true });
-    moved?.scrollIntoView({ block: "nearest" });
-  }
   function renderRow(
     task: Task,
     parent: Task | null,
     children: Task[],
     nested: boolean,
-    list: SortList,
   ) {
     // Open by default, except in History; a search also opens lists with matching subtasks.
     const expanded =
       (!task.completed_at || (searching && children.some((child) => matchesSearch(child, terms)))) !==
       toggledSubtasks.has(task.id);
-    const index = list.ids.indexOf(task.id);
-    const childList = { ids: children.map((child) => child.id), label: `“${task.title}”` };
-    // The days a move past either end of this row's list goes to.
-    const above = list.zone ? neighbourZone(list.zone, -1) : null;
-    const below = list.zone ? neighbourZone(list.zone, 1) : null;
     return (
       <TaskRow
         key={task.id}
@@ -736,7 +596,7 @@ export default function TaskApp() {
             ? {
                 expanded,
                 onToggle: () => toggleSubtasks(task.id),
-                children: children.map((child) => renderRow(child, task, [], true, childList)),
+                children: children.map((child) => renderRow(child, task, [], true)),
               }
             : undefined
         }
@@ -754,41 +614,15 @@ export default function TaskApp() {
         onAddSubtask={
           task.parent_id === null && !task.completed_at ? () => addSubtask(task) : undefined
         }
-        reorder={
-          // A row in a day's list can always go to another day, even alone in its list.
-          !reorderBlock && index >= 0 && (list.ids.length > 1 || !!list.zone)
-            ? {
-                onGripDown: (event) =>
-                  drag.start(event, (order, zone) =>
-                    zone !== null && zone !== list.zone
-                      ? reschedule(task, zone, order)
-                      : announceMove(task, store.moveTask(task.id, order), list),
-                  ),
-                canMoveUp: index > 0 || !!above,
-                canMoveDown: index < list.ids.length - 1 || !!below,
-                moveUpLabel: index === 0 && above ? `Move to ${zoneName(above)}` : undefined,
-                moveDownLabel:
-                  index === list.ids.length - 1 && below ? `Move to ${zoneName(below)}` : undefined,
-              }
-            : undefined
-        }
-        onMove={(step, from) => moveTask(task, step, from, list)}
       />
     );
   }
-  // `label` names the list in announcements, such as a section or a date, and `zone` is the
-  // drop zone of a list of tasks due on one day.
-  function renderTasks(tasks: Task[], label?: string, zone?: string) {
-    const entries = nestTasks(tasks, store.tasks, shownParents);
-    // Subtasks shown on their own are ordered from their parent, not here.
-    const list = {
-      ids: entries.filter((entry) => entry.task.parent_id === null).map((entry) => entry.task.id),
-      label,
-      zone,
-    };
+  function renderTasks(tasks: Task[]) {
     return (
-      <ul className={sectionStyles["task-list"]} data-sort-list={zone === undefined ? undefined : ""}>
-        {entries.map((entry) => renderRow(entry.task, entry.parent, entry.subtasks, false, list))}
+      <ul className={sectionStyles["task-list"]}>
+        {nestTasks(tasks, store.tasks, shownParents).map((entry) =>
+          renderRow(entry.task, entry.parent, entry.subtasks, false),
+        )}
       </ul>
     );
   }
@@ -803,9 +637,8 @@ export default function TaskApp() {
         today &&
         new Date(`${today}T12:00:00`).toLocaleDateString("en", { month: "short", day: "numeric" })
       }
-      zone="today"
     >
-      {renderTasks(dueTodayTasks, "Today", "today")}
+      {renderTasks(dueTodayTasks)}
     </TaskSection>
   );
   const overdueSection = (
@@ -815,10 +648,9 @@ export default function TaskApp() {
       expanded={overdueExpanded}
       onToggle={() => setOverdueExpanded((value) => !value)}
       overdue
-      zone="overdue"
       emptyText="Nothing overdue."
     >
-      {renderTasks(overdueTasks, "Overdue", "overdue")}
+      {renderTasks(overdueTasks)}
     </TaskSection>
   );
   // All tasks' end of the list: how many tasks it holds and the last day one is due. It's
@@ -860,7 +692,7 @@ export default function TaskApp() {
 
   return (
     <div
-      className={`${styles["app-shell"]} ${sidebarOpen ? "" : styles["sidebar-collapsed"]} ${drag.dragging ? styles["is-dragging"] : ""}`}
+      className={`${styles["app-shell"]} ${sidebarOpen ? "" : styles["sidebar-collapsed"]}`}
     >
       <a href="#main-content" className="skip-link">
         Skip to tasks
@@ -875,7 +707,7 @@ export default function TaskApp() {
         <Sidebar {...sidebarProps} onCollapse={() => setSidebarOpen(false)} />
       </aside>
       <div className={styles["main-shell"]}>
-        <header ref={topbar} className={styles.topbar}>
+        <header className={styles.topbar}>
           <div className={styles.breadcrumb}>
             {!sidebarOpen && (
               <button
@@ -1096,17 +928,12 @@ export default function TaskApp() {
                     )}
                   </div>
                   {view === "today" ? (
-                    // Tasks drag between Today and Overdue: up to make them due today, down to
-                    // make them due yesterday.
-                    <div data-sort-group>
+                    <div>
                       {(!searching || dueTodayTasks.length > 0) && todaySection}
-                      {/* While dragging there's always an Overdue to drop into. */}
-                      {(overdueCount > 0 || drag.dragging) && overdueSection}
+                      {overdueCount > 0 && overdueSection}
                     </div>
                   ) : view === "all" ? (
-                    // Overdue, Today and every day from tomorrow are drop zones: dragging a task
-                    // to one makes it due then. Tasks with no date only reorder among themselves.
-                    <div className={sectionStyles["day-list"]} data-sort-group>
+                    <div className={sectionStyles["day-list"]}>
                       {(!searching || overdueCount > 0) && overdueSection}
                       {(!searching || dueTodayTasks.length > 0) && todaySection}
                       {noDateTasks.length > 0 && (
@@ -1117,7 +944,7 @@ export default function TaskApp() {
                           onToggle={() => setNoDateExpanded((value) => !value)}
                           summaryNoun="with no date"
                         >
-                          {renderTasks(noDateTasks, "No date")}
+                          {renderTasks(noDateTasks)}
                         </TaskSection>
                       )}
                       {/* Its tasks end after the last day with one, or here if none are due later. */}
@@ -1137,8 +964,6 @@ export default function TaskApp() {
                             )}
                             <section
                               className={`${sectionStyles["day-section"]} ${tasks.length ? "" : sectionStyles["empty-day"]}`}
-                              data-sort-zone={date}
-                              data-sort-label={dayLabel(date)}
                             >
                               <h3 className={sectionStyles["section-heading"]}>
                                 {dateLabel(date)}
@@ -1149,7 +974,7 @@ export default function TaskApp() {
                                   })}
                                 </span>
                               </h3>
-                              {tasks.length > 0 && renderTasks(tasks, dateLabel(date), date)}
+                              {tasks.length > 0 && renderTasks(tasks)}
                             </section>
                             {date === lastTaskDay && endOfTasks}
                             {date === upcomingEnd && !searching && (
@@ -1361,9 +1186,6 @@ export default function TaskApp() {
           </div>
         </Dialog>
       )}
-      <p role="status" className="sr-only">
-        {announcement}
-      </p>
       {notice && (
         <div
           className={`${styles.toast} ${toastDrag?.active ? styles["toast-dragging"] : ""}`}

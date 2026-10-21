@@ -65,6 +65,8 @@
   --chip-selected-bg: rgba(94, 106, 210, 0.14);
   --chip-selected-border: rgba(168, 177, 255, 0.24);
   --chip-selected-text: #bdc4ff;
+  --end-marker-text: #a8b1ff;
+  --end-marker-rule: rgba(168, 177, 255, 0.45);
   --date-token-bg: rgba(94, 106, 210, 0.3);
   --modal-shadow: #0006;
   --backdrop: rgba(0, 0, 0, 0.7);
@@ -78,8 +80,6 @@
   --warning-text: #edc18b;
   --restore-hover: rgba(94, 106, 210, 0.12);
   --focus-halo: rgba(94, 106, 210, 0.15);
-  --drag-background: #2c2d33;
-  --drag-shadow: 0 4px 12px rgba(0, 0, 0, 0.2), 0 12px 32px rgba(0, 0, 0, 0.28);
   --ease: cubic-bezier(0.25, 0.46, 0.45, 0.94);
   --ease-reposition: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-enter: cubic-bezier(0.165, 0.84, 0.44, 1);
@@ -151,6 +151,8 @@
   --chip-selected-bg: #eceefe;
   --chip-selected-border: #7882ce;
   --chip-selected-text: #4b57c8;
+  --end-marker-text: #343fa8;
+  --end-marker-rule: #7882ce;
   --date-token-bg: rgba(94, 106, 210, 0.18);
   --modal-shadow: rgba(20, 24, 40, 0.16);
   --backdrop: rgba(20, 24, 40, 0.4);
@@ -164,8 +166,6 @@
   --warning-text: #80500f;
   --restore-hover: #eceefe;
   --focus-halo: rgba(75, 87, 200, 0.15);
-  --drag-background: #ffffff;
-  --drag-shadow: 0 4px 12px rgba(20, 24, 40, 0.08), 0 12px 32px rgba(20, 24, 40, 0.12);
 }
 @theme inline {
   --color-background: var(--background);

@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  manualOrder,
+  byCreated,
   matchesView,
   nestTasks,
   parseSnapshot,
-  sequenceAt,
   type Task,
 } from "@/app/lib/tasks";
 
@@ -21,7 +20,6 @@ function task(id: string, fields: Partial<Task> = {}): Task {
     priority: null,
     recurrence: null,
     parent_id: null,
-    sequence: 1,
     completed_at: null,
     created_at: EARLIER,
     updated_at: EARLIER,
@@ -58,63 +56,21 @@ describe("matchesView", () => {
   });
 });
 
-describe("sequenceAt", () => {
-  const rest = [task("a", { sequence: 1 }), task("b", { sequence: 2 })];
-
-  it("goes before the first, after the last, or halfway between", () => {
-    expect(sequenceAt([], 0)).toBe(1);
-    expect(sequenceAt(rest, 0)).toBe(0);
-    expect(sequenceAt(rest, 2)).toBe(3);
-    expect(sequenceAt(rest, 1)).toBe(1.5);
-  });
-
-  it("returns null when the neighbours are too close", () => {
-    const close = [task("a", { sequence: 1 }), task("b", { sequence: 1 + 1e-7 })];
-    expect(sequenceAt(close, 1)).toBeNull();
-  });
-});
-
-describe("manualOrder", () => {
-  it("sorts by sequence, with a lone subtask right after its parent's place", () => {
+describe("byCreated", () => {
+  it("sorts oldest first, breaking ties by id", () => {
     const tasks = [
-      task("late", { sequence: 3 }),
-      task("child", { parent_id: "parent", sequence: 1 }),
-      task("first", { sequence: 1 }),
+      task("newer", { created_at: "2026-10-02T00:00:00.000Z" }),
+      task("b"),
+      task("a"),
     ];
-    const parent = task("parent", { sequence: 2 });
-    const sorted = [...tasks].sort(manualOrder([...tasks, parent]));
-    expect(sorted.map((item) => item.id)).toEqual(["first", "child", "late"]);
-  });
-
-  it("puts a parent before its subtasks", () => {
-    const tasks = [
-      task("child", { parent_id: "parent", sequence: 1 }),
-      task("next", { sequence: 3 }),
-      task("parent", { sequence: 2 }),
-    ];
-    expect([...tasks].sort(manualOrder(tasks)).map((item) => item.id)).toEqual([
-      "parent",
-      "child",
-      "next",
-    ]);
-  });
-
-  it("breaks ties by creation", () => {
-    const tasks = [
-      task("newer", { sequence: 2, created_at: "2026-10-02T00:00:00.000Z" }),
-      task("older", { sequence: 2 }),
-    ];
-    expect([...tasks].sort(manualOrder(tasks)).map((item) => item.id)).toEqual([
-      "older",
-      "newer",
-    ]);
+    expect([...tasks].sort(byCreated).map((item) => item.id)).toEqual(["a", "b", "newer"]);
   });
 });
 
 describe("nestTasks", () => {
   const parent = task("parent");
-  const open = task("open", { parent_id: "parent", sequence: 2 });
-  const done = task("done", { parent_id: "parent", completed_at: EARLIER, sequence: 1 });
+  const open = task("open", { parent_id: "parent", created_at: "2026-10-02T00:00:00.000Z" });
+  const done = task("done", { parent_id: "parent", completed_at: EARLIER });
   const all = [parent, open, done];
 
   it("a shown parent carries its subtasks in the same state, and they aren't listed twice", () => {
@@ -164,51 +120,37 @@ describe("parseSnapshot", () => {
         [{ id: "work", name: "Work" }],
       ),
     );
-    expect(data.version).toBe(6);
+    expect(data.version).toBe(7);
     expect(data.tasks[0]).toEqual(
       task("b", {
         title: "B",
         project_id: "work",
         due_date: TODAY,
         priority: 2,
-        sequence: 2,
         created_at: "2026-10-02T00:00:00.000Z",
         updated_at: "2026-10-02T00:00:00.000Z",
       }),
     );
-    expect(data.tasks[1]).toEqual(task("a", { title: "A", sequence: 1 }));
+    expect(data.tasks[1]).toEqual(task("a", { title: "A" }));
   });
 
-  it("numbers each scope separately when adding the manual order", () => {
-    // Version 4 tasks had no sequence.
-    const v4 = (id: string, fields: Partial<Task> = {}) => ({
-      ...task(id, fields),
-      sequence: undefined,
-    });
-    const data = parseSnapshot(
-      saved(4, [
-        v4("p2", { created_at: "2026-10-03T00:00:00.000Z" }),
-        v4("p1"),
-        v4("c", { parent_id: "p1", created_at: "2026-10-05T00:00:00.000Z" }),
-      ]),
-    );
-    expect(data.tasks.map(({ id, sequence }) => [id, sequence])).toEqual([
-      ["p2", 2],
-      ["p1", 1],
-      ["c", 1],
-    ]);
-  });
-
-  it("adds soft deletes to version 5 data", () => {
-    const tasks = [task("a", { sequence: 7 }), task("b", { sequence: 0.5 })];
-    const v5 = tasks.map((item) => ({ ...item, deleted_at: undefined }));
+  it("adds soft deletes to version 5 data and drops its manual order", () => {
+    const tasks = [task("a"), task("b")];
+    const v5 = tasks.map((item, i) => ({ ...item, sequence: i + 1, deleted_at: undefined }));
     expect(parseSnapshot(saved(5, v5)).tasks).toEqual(tasks);
   });
 
-  it("keeps version 6 data as it is, tombstones included", () => {
-    const tasks = [task("a", { sequence: 7 }), task("b", { deleted_at: EARLIER })];
+  it("drops the manual order from version 6 data, keeping tombstones", () => {
+    const tasks = [task("a"), task("b", { deleted_at: EARLIER })];
+    const v6 = tasks.map((item) => ({ ...item, sequence: 0.5 }));
     const now = Date.parse("2026-10-20T00:00:00.000Z");
-    expect(parseSnapshot(saved(6, tasks), now).tasks).toEqual(tasks);
+    expect(parseSnapshot(saved(6, v6), now).tasks).toEqual(tasks);
+  });
+
+  it("keeps version 7 data as it is", () => {
+    const tasks = [task("a"), task("b", { deleted_at: EARLIER })];
+    const now = Date.parse("2026-10-20T00:00:00.000Z");
+    expect(parseSnapshot(saved(7, tasks), now).tasks).toEqual(tasks);
   });
 
   it("drops tombstones older than 30 days, with their subtasks", () => {
@@ -235,7 +177,6 @@ describe("parseSnapshot", () => {
       "a subtask of a subtask",
       saved(5, [task("a"), task("b", { parent_id: "a" }), task("c", { parent_id: "b" })]),
     ],
-    ["a missing sequence", saved(5, [{ ...task("a"), sequence: null }])],
     ["a bad deleted_at", saved(6, [task("a", { deleted_at: "soon" })])],
     [
       "a live subtask of a deleted task",

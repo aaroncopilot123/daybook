@@ -3,18 +3,15 @@ import {
   applyChanges,
   deleteProject,
   deleteTask,
-  moveTask,
-  rescheduleTask,
   saveProject,
   saveTask,
   toggleTask,
   undoDelete,
-  undoReschedule,
   undoToggle,
   type Changes,
   type Clock,
 } from "@/app/lib/mutations";
-import { bySequence, type Project, type Snapshot, type Task, type TaskDraft } from "@/app/lib/tasks";
+import { byCreated, type Project, type Snapshot, type Task, type TaskDraft } from "@/app/lib/tasks";
 
 const NOW = "2026-10-20T09:00:00.000Z";
 const TODAY = "2026-10-20";
@@ -35,7 +32,6 @@ function task(id: string, fields: Partial<Task> = {}): Task {
     priority: null,
     recurrence: null,
     parent_id: null,
-    sequence: 1,
     completed_at: null,
     created_at: EARLIER,
     updated_at: EARLIER,
@@ -45,7 +41,7 @@ function task(id: string, fields: Partial<Task> = {}): Task {
 }
 
 const snapshot = (tasks: Task[], projects: Project[] = []): Snapshot => ({
-  version: 6,
+  version: 7,
   tasks,
   projects,
 });
@@ -68,7 +64,7 @@ const changedIds = (changes: Changes) => changes.tasks.map((item) => item.id);
 const order = (data: Snapshot, parentId: string | null = null) =>
   data.tasks
     .filter((item) => item.parent_id === parentId && item.deleted_at === null)
-    .sort(bySequence)
+    .sort(byCreated)
     .map((item) => item.id);
 
 describe("applyChanges", () => {
@@ -91,7 +87,7 @@ describe("toggleTask", () => {
     snapshot([
       task("parent"),
       task("open", { parent_id: "parent" }),
-      task("done", { parent_id: "parent", completed_at: EARLIER, sequence: 2 }),
+      task("done", { parent_id: "parent", completed_at: EARLIER }),
       task("other"),
     ]);
 
@@ -156,7 +152,6 @@ describe("toggleTask", () => {
         due_date: TODAY,
         recurrence: { interval: 1, unit: "week" },
         project_id: "p",
-        sequence: 3,
       }),
       task("step", { parent_id: "weekly", project_id: "p", due_date: "2026-10-19" }),
     ]);
@@ -169,7 +164,8 @@ describe("toggleTask", () => {
     expect(spawned).toMatchObject({
       due_date: "2026-10-27",
       parent_id: null,
-      sequence: 3,
+      // It keeps the original's creation time, and so its place in the list.
+      created_at: EARLIER,
       completed_at: null,
       recurrence: { interval: 1, unit: "week" },
     });
@@ -197,120 +193,21 @@ describe("toggleTask", () => {
   });
 });
 
-describe("moveTask", () => {
-  const four = () =>
-    snapshot([
-      task("a", { sequence: 1 }),
-      task("b", { sequence: 2 }),
-      task("c", { sequence: 3 }),
-      task("d", { sequence: 4 }),
-    ]);
-
-  it("moving up lands right before the shown task below, past hidden tasks", () => {
-    // The list shows a, c and d; b is hidden and keeps its place.
-    const { changes, position } = moveTask(four(), "d", ["a", "d", "c"], clock())!;
-    expect(position).toEqual({ position: 2, total: 3 });
-    expect(changes.tasks).toEqual([task("d", { sequence: 2.5, updated_at: NOW })]);
-    expect(order(applyChanges(four(), changes))).toEqual(["a", "b", "d", "c"]);
-  });
-
-  it("moving down lands right after the shown task above", () => {
-    const { changes } = moveTask(four(), "a", ["c", "a", "d"], clock())!;
-    expect(changes.tasks).toEqual([task("a", { sequence: 3.5, updated_at: NOW })]);
-    expect(order(applyChanges(four(), changes))).toEqual(["b", "c", "a", "d"]);
-  });
-
-  it("moves to either end of the scope", () => {
-    expect(moveTask(four(), "c", ["c", "a", "b", "d"], clock())!.changes.tasks[0].sequence).toBe(0);
-    expect(moveTask(four(), "a", ["b", "c", "d", "a"], clock())!.changes.tasks[0].sequence).toBe(5);
-  });
-
-  it("changes nothing when the task stays put", () => {
-    const moved = moveTask(four(), "b", ["a", "b", "c", "d"], clock())!;
-    expect(moved.changes.tasks).toEqual([]);
-    expect(moved.position).toEqual({ position: 2, total: 4 });
-  });
-
-  it("numbers the scope again when the gap is too small", () => {
-    const data = snapshot([
-      task("a", { sequence: 1 }),
-      task("b", { sequence: 1 + 1e-7 }),
-      task("c", { sequence: 2 }),
-    ]);
-    const { changes } = moveTask(data, "c", ["a", "c", "b"], clock())!;
-    const next = applyChanges(data, changes);
-    expect(order(next)).toEqual(["a", "c", "b"]);
-    expect(next.tasks.map((item) => item.sequence)).toEqual([1, 3, 2]);
-    // a and c already had those numbers.
-    expect(changedIds(changes)).toEqual(["b"]);
-  });
-
-  it("only orders subtasks among their siblings", () => {
-    const data = snapshot([
-      task("p", { sequence: 1 }),
-      task("x", { parent_id: "p", sequence: 1 }),
-      task("y", { parent_id: "p", sequence: 2 }),
-      task("q", { sequence: 2 }),
-    ]);
-    const { changes } = moveTask(data, "y", ["y", "x"], clock())!;
-    expect(changes.tasks).toEqual([task("y", { parent_id: "p", sequence: 0, updated_at: NOW })]);
-  });
-});
-
-describe("rescheduleTask", () => {
-  const data = () =>
-    snapshot([
-      task("today", { due_date: TODAY, sequence: 1 }),
-      task("later", { due_date: "2026-10-23", sequence: 2 }),
-    ]);
-
-  it("sets the date and keeps the order when it lands in place", () => {
-    const { changes, undo } = rescheduleTask(data(), "later", TODAY, ["today", "later"], clock())!;
-    expect(changes.tasks).toEqual([
-      task("later", { due_date: TODAY, sequence: 2, updated_at: NOW }),
-    ]);
-    expect(undo).toEqual({
-      id: "later",
-      dueDate: TODAY,
-      position: { position: 2, total: 2 },
-      previous: [{ id: "later", due_date: "2026-10-23", sequence: 2 }],
-    });
-  });
-
-  it("places it among the day's tasks", () => {
-    const { changes } = rescheduleTask(data(), "later", TODAY, ["later", "today"], clock())!;
-    expect(changes.tasks).toEqual([
-      task("later", { due_date: TODAY, sequence: 0, updated_at: NOW }),
-    ]);
-  });
-
-  it("returns null when the date doesn't change", () => {
-    expect(rescheduleTask(data(), "today", TODAY, ["today"], clock())).toBeNull();
-  });
-
-  it("undo restores the date and the place", () => {
-    const before = data();
-    const { changes, undo } = rescheduleTask(before, "later", TODAY, ["later", "today"], clock())!;
-    const moved = applyChanges(before, changes);
-    const back = applyChanges(moved, undoReschedule(moved, undo, clock()).changes);
-    expect(find(back, "later")).toMatchObject({ due_date: "2026-10-23", sequence: 2 });
-  });
-});
-
 describe("saveTask", () => {
-  it("adds a new task at the end of the top-level order", () => {
-    const data = snapshot([task("a", { sequence: 4 }), task("s", { parent_id: "a", sequence: 9 })]);
+  it("adds a new task, created now so it lists last", () => {
+    const data = snapshot([task("a"), task("s", { parent_id: "a" })]);
     const saved = saveTask(data, draft({ title: "New" }), undefined, undefined, clock());
     expect(saved.id).toBe("new-1");
     expect(saved.changes.tasks).toEqual([
-      task("new-1", { title: "New", sequence: 5, created_at: NOW, updated_at: NOW }),
+      task("new-1", { title: "New", created_at: NOW, updated_at: NOW }),
     ]);
+    expect(order(applyChanges(data, saved.changes))).toEqual(["a", "new-1"]);
   });
 
   it("a new subtask takes its parent's project, never repeats and goes last", () => {
     const data = snapshot([
       task("p", { project_id: "work" }),
-      task("s", { parent_id: "p", project_id: "work", sequence: 2 }),
+      task("s", { parent_id: "p", project_id: "work" }),
     ]);
     const saved = saveTask(
       data,
@@ -323,8 +220,8 @@ describe("saveTask", () => {
       parent_id: "p",
       project_id: "work",
       recurrence: null,
-      sequence: 3,
     });
+    expect(order(applyChanges(data, saved.changes), "p")).toEqual(["s", "new-1"]);
   });
 
   it("a subtask can't be the parent of another task", () => {
@@ -336,9 +233,9 @@ describe("saveTask", () => {
   it("makes the subtasks match the composer's list", () => {
     const data = snapshot([
       task("p", { project_id: "home" }),
-      task("one", { parent_id: "p", project_id: "home", sequence: 1 }),
-      task("two", { parent_id: "p", project_id: "home", sequence: 2 }),
-      task("three", { parent_id: "p", project_id: "home", sequence: 3 }),
+      task("one", { parent_id: "p", project_id: "home" }),
+      task("two", { parent_id: "p", project_id: "home" }),
+      task("three", { parent_id: "p", project_id: "home" }),
     ]);
     const saved = saveTask(
       data,
@@ -348,25 +245,32 @@ describe("saveTask", () => {
         { id: "three", title: " Three ", description: "note", done: false },
         { title: "Fresh", description: "", done: true },
         { title: "   ", description: "", done: false },
+        { title: "Later", description: "", done: false },
         { id: "one", title: "", description: "", done: true },
       ],
       clock(),
     );
-    expect(saved).toMatchObject({ id: "p", moved: 2, added: ["new-1"], completed: 1, removed: 1 });
+    expect(saved).toMatchObject({
+      id: "p",
+      moved: 2,
+      added: ["new-1", "new-2"],
+      completed: 1,
+      removed: 1,
+    });
     const next = applyChanges(data, saved.changes);
-    expect(order(next, "p")).toEqual(["three", "new-1", "one"]);
+    // Kept subtasks stay in creation order; new ones follow in the order they were typed.
+    expect(order(next, "p")).toEqual(["one", "three", "new-1", "new-2"]);
     expect(find(next, "three")).toMatchObject({
       title: "Three",
       description: "note",
       project_id: "work",
     });
     // An emptied title keeps the old one.
-    expect(find(next, "one")).toMatchObject({ title: "one", completed_at: NOW, sequence: 3 });
+    expect(find(next, "one")).toMatchObject({ title: "one", completed_at: NOW });
     expect(find(next, "new-1")).toMatchObject({
       title: "Fresh",
       project_id: "work",
       completed_at: NOW,
-      sequence: 2,
     });
     // Removed subtasks become tombstones.
     expect(find(next, "two").deleted_at).toBe(NOW);
@@ -425,20 +329,13 @@ describe("deleting", () => {
     expect(undoDelete(data, { ids: ["s"] }, clock()).changes.tasks).toEqual([]);
   });
 
-  it("deleted tasks take no part in ordering or cascades", () => {
+  it("deleted tasks take no part in cascades", () => {
     const data = snapshot([
-      task("a", { sequence: 1 }),
-      task("dead", { sequence: 9, deleted_at: EARLIER }),
-      task("p", { sequence: 2 }),
+      task("p"),
       task("dead-child", { parent_id: "p", deleted_at: EARLIER }),
     ]);
-    const saved = saveTask(data, draft(), undefined, undefined, clock());
-    expect(saved.changes.tasks[0].sequence).toBe(3);
     const toggled = toggleTask(data, "p", clock())!;
     expect(changedIds(toggled.changes)).toEqual(["p"]);
-    expect(moveTask(data, "dead", ["dead", "a"], clock())).toBeNull();
-    const moved = moveTask(data, "p", ["p", "a"], clock())!;
-    expect(moved.changes.tasks[0].sequence).toBe(0);
   });
 
   it("deleting a project keeps its tasks, without a project", () => {

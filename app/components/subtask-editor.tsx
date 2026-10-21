@@ -1,10 +1,8 @@
 "use client";
 
 import { useEffect, useId, useRef, type KeyboardEvent } from "react";
-import { flushSync } from "react-dom";
-import { Check, GripVertical, Plus, TextAlignStart, X } from "lucide-react";
+import { Check, Plus, TextAlignStart, X } from "lucide-react";
 import { MAX_SUBTASKS, newId, type SubtaskDraft } from "../lib/tasks";
-import { animateReorder, useDragReorder } from "../lib/use-drag-reorder";
 import styles from "./subtask-editor.module.css";
 
 // A line in the composer's subtask list; `key` is stable while editing, `id` marks a saved
@@ -48,9 +46,7 @@ export function SubtaskEditor({
 }) {
   const id = useId();
   const root = useRef<HTMLDivElement>(null);
-  const list = useRef<HTMLUListElement>(null);
   const addButton = useRef<HTMLButtonElement>(null);
-  const drag = useDragReorder();
   const fieldFor = (field: Field) =>
     root.current?.querySelector<HTMLInputElement | HTMLTextAreaElement>(
       field.note
@@ -150,30 +146,6 @@ export function SubtaskEditor({
     }
   };
 
-  const reorder = (keys: string[]) =>
-    keys.map((key) => lines.find((line) => line.key === key)!);
-  const announceMove = (line: SubtaskLine, index: number) =>
-    announce(`Moved “${nameOf(line)}” to position ${index + 1} of ${lines.length}.`);
-
-  // One place up or down; focus stays in the same field with the same selection.
-  const move = (line: SubtaskLine, step: -1 | 1, field: HTMLInputElement | HTMLTextAreaElement) => {
-    const index = lines.indexOf(line);
-    const target = index + step;
-    if (target < 0 || target >= lines.length) {
-      announce(`“${nameOf(line)}” is already ${step < 0 ? "first" : "last"}.`);
-      return;
-    }
-    const keys = lines.map((item) => item.key).filter((key) => key !== line.key);
-    keys.splice(target, 0, line.key);
-    focusNext.current = {
-      key: line.key,
-      note: field instanceof HTMLTextAreaElement,
-      selection: [field.selectionStart ?? 0, field.selectionEnd ?? 0],
-    };
-    animateReorder(list.current, () => flushSync(() => onLinesChange(reorder(keys))));
-    announceMove(line, target);
-  };
-
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const target = event.target;
     const isNote = target instanceof HTMLTextAreaElement;
@@ -181,16 +153,6 @@ export function SubtaskEditor({
     const key = isNote ? target.dataset.note : target.dataset.line;
     const line = lines.find((item) => item.key === key);
     const at = fields.findIndex((field) => field.key === key && !!field.note === isNote);
-    if (
-      line &&
-      event.altKey &&
-      event.shiftKey &&
-      (event.key === "ArrowUp" || event.key === "ArrowDown")
-    ) {
-      event.preventDefault();
-      move(line, event.key === "ArrowUp" ? -1 : 1, target);
-      return;
-    }
     if (event.key === "Enter") {
       // Never submit the task from a subtask field, except on purpose with ⌘/Ctrl+Enter.
       if (event.metaKey || event.ctrlKey) {
@@ -281,17 +243,16 @@ export function SubtaskEditor({
         <p className={styles["subtasks-hint"]}>Each repeat starts with these subtasks unchecked.</p>
       )}
       <span id={`${id}-line-hint`} className="sr-only">
-        Shift+Enter adds a description. Alt+Shift+Up or Down moves it.
+        Shift+Enter adds a description.
       </span>
       {lines.length > 0 && (
-        <ul ref={list} className={styles["subtask-items"]} aria-labelledby={`${id}-heading`}>
+        <ul className={styles["subtask-items"]} aria-labelledby={`${id}-heading`}>
           {lines.map((line, index) => {
             const name = line.title || `subtask ${index + 1}`;
             const noteId = `${id}-note-${line.key}`;
             return (
               <li
                 key={line.key}
-                data-sort-id={line.key}
                 className={`${styles["subtask-item"]} ${line.id ? "" : styles.added}`}
                 onBlur={(event) => {
                   // An empty description closes once focus moves elsewhere. Without a
@@ -305,21 +266,6 @@ export function SubtaskEditor({
                     updateLine(line.key, { description: "", noteOpen: false });
                 }}
               >
-                {lines.length > 1 && (
-                  <span
-                    className={styles["subtask-grip"]}
-                    aria-hidden="true"
-                    title="Drag to reorder"
-                    onPointerDown={(event) =>
-                      drag.start(event, (keys) => {
-                        onLinesChange(reorder(keys));
-                        announceMove(line, keys.indexOf(line.key));
-                      })
-                    }
-                  >
-                    <GripVertical size={14} />
-                  </span>
-                )}
                 <label className={styles["subtask-check"]}>
                   <input
                     type="checkbox"

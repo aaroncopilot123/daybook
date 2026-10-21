@@ -428,11 +428,6 @@
     border-color: var(--selected-border);
   }
 }
-/* Out of the way of a dragged row. */
-.app-shell.is-dragging .back-to-top {
-  opacity: 0;
-  pointer-events: none;
-}
 @keyframes back-to-top-in {
   from {
     opacity: 0;
@@ -552,11 +547,6 @@
   :global(.icon-button).back-to-top {
     right: 26px;
     bottom: calc(22px + 52px + 14px + env(safe-area-inset-bottom));
-  }
-  /* Out of the way of a dragged row. */
-  .app-shell.is-dragging .mobile-fab {
-    opacity: 0;
-    pointer-events: none;
   }
   .project-form input {
     font-size: 16px;

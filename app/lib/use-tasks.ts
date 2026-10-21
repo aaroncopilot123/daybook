@@ -12,9 +12,9 @@ import {
   type TaskDraft,
 } from "./tasks";
 import * as mutations from "./mutations";
-import type { Changes, Clock, DeleteUndo, ScheduleUndo, ToggleUndo } from "./mutations";
+import type { Changes, Clock, DeleteUndo, ToggleUndo } from "./mutations";
 
-const emptySnapshot: Snapshot = { version: 6, tasks: [], projects: [] };
+const emptySnapshot: Snapshot = { version: 7, tasks: [], projects: [] };
 
 const clock = (): Clock => ({ now: new Date().toISOString(), today: localDate(), newId });
 
@@ -95,24 +95,6 @@ export function useTasks() {
     commit(mutations.undoToggle(currentData.current, undo, clock()).changes);
   }
 
-  function moveTask(id: string, order: string[]) {
-    const moved = mutations.moveTask(currentData.current, id, order, clock());
-    if (!moved) return null;
-    commit(moved.changes);
-    return moved.position;
-  }
-
-  function rescheduleTask(id: string, dueDate: string, order: string[]): ScheduleUndo | null {
-    const moved = mutations.rescheduleTask(currentData.current, id, dueDate, order, clock());
-    if (!moved) return null;
-    commit(moved.changes);
-    return moved.undo;
-  }
-
-  function undoReschedule(undo: ScheduleUndo) {
-    commit(mutations.undoReschedule(currentData.current, undo, clock()).changes);
-  }
-
   function deleteTask(id: string): DeleteUndo | null {
     const deleted = mutations.deleteTask(currentData.current, id, clock());
     if (!deleted) return null;
@@ -142,9 +124,6 @@ export function useTasks() {
     saveTask,
     toggleTask,
     undoToggle,
-    moveTask,
-    rescheduleTask,
-    undoReschedule,
     deleteTask,
     undoDelete,
     saveProject,
