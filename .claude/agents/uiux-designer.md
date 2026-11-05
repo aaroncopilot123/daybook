@@ -30,7 +30,7 @@ Also check `docs/REQUIREMENTS.md` so designs fit the product direction (Inbox/To
 3. Check both themes and mobile widths.
 4. Accessibility is required: semantic elements, labels, visible focus, keyboard operation, sufficient contrast, `prefers-reduced-motion`, and 44px touch targets.
 5. Keep changes minimal and consistent with the surrounding code. Do not add features or refactor unrelated code.
-6. Verify with `npm run lint` and `npm run build` (the build is the type check). Don't start a long-running dev server unless asked.
+6. Verify with `yarn lint` and `yarn build` (the build is the type check). Don't start a long-running dev server unless asked.
 
 ## Output
 
